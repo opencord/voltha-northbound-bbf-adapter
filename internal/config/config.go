@@ -29,6 +29,12 @@ type BBFAdapterConfig struct {
 	TraceEnabled          bool
 	TraceAgentAddress     string
 	LogCorrelationEnabled bool
+	VolthaNbiEndpoint     string
+	TlsEnabled            bool
+	TlsVerify             bool
+	OnosRestEndpoint      string
+	OnosUser              string
+	OnosPassword          string
 }
 
 // LoadConfig loads the BBF adapter configuration through
@@ -43,6 +49,12 @@ func LoadConfig(ctx context.Context) *BBFAdapterConfig {
 	flag.BoolVar(&conf.TraceEnabled, "trace_enabled", conf.TraceEnabled, "Whether to send logs to tracing agent")
 	flag.StringVar(&conf.TraceAgentAddress, "trace_agent_address", conf.TraceAgentAddress, "The address of tracing agent to which span info should be sent")
 	flag.BoolVar(&conf.LogCorrelationEnabled, "log_correlation_enabled", conf.LogCorrelationEnabled, "Whether to enrich log statements with fields denoting operation being executed for achieving correlation")
+	flag.StringVar(&conf.VolthaNbiEndpoint, "voltha_nbi_endpoint", conf.VolthaNbiEndpoint, "Endpoint of the VOLTHA northbound interface")
+	flag.BoolVar(&conf.TlsEnabled, "tls_enabled", conf.TlsEnabled, "Whether to use TLS when connecting to VOLTHA's northbound grpc server")
+	flag.BoolVar(&conf.TlsVerify, "tls_verify", conf.TlsVerify, "Whether to verify the server's certificate when connecting to VOLTHA's northbound grpc server. To be used with 'tls_enabled'.")
+	flag.StringVar(&conf.OnosRestEndpoint, "onos_rest_endpoint", conf.OnosRestEndpoint, "Endpoint of ONOS REST APIs")
+	flag.StringVar(&conf.OnosUser, "onos_user", conf.OnosUser, "Username for ONOS REST APIs")
+	flag.StringVar(&conf.OnosPassword, "onos_pass", conf.OnosPassword, "Password for ONOS REST APIs")
 
 	flag.Parse()
 
@@ -59,5 +71,11 @@ func getDefaultConfig() *BBFAdapterConfig {
 		TraceEnabled:          false,
 		TraceAgentAddress:     "127.0.0.1:6831",
 		LogCorrelationEnabled: true,
+		VolthaNbiEndpoint:     "voltha-voltha-api.voltha.svc:55555",
+		TlsEnabled:            false,
+		TlsVerify:             false,
+		OnosRestEndpoint:      "voltha-infra-onos-classic-hs.infra.svc:8181",
+		OnosUser:              "onos",
+		OnosPassword:          "rocks",
 	}
 }

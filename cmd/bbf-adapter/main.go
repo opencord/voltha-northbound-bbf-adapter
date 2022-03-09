@@ -21,18 +21,101 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
 	"github.com/opencord/voltha-lib-go/v7/pkg/probe"
 	"github.com/opencord/voltha-lib-go/v7/pkg/version"
+	clients "github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
 	"github.com/opencord/voltha-northbound-bbf-adapter/internal/config"
 )
 
+//String for readiness probe services
 const (
 	bbfAdapterService = "bbf-adapter-service"
 )
+
+type bbfAdapter struct {
+	conf            *config.BBFAdapterConfig
+	volthaNbiClient *clients.VolthaNbiClient
+	oltAppClient    *clients.OltAppClient
+}
+
+func newBbfAdapter(conf *config.BBFAdapterConfig) *bbfAdapter {
+	return &bbfAdapter{
+		conf: conf,
+	}
+}
+
+func (a *bbfAdapter) start(ctx context.Context, wg *sync.WaitGroup) {
+	var err error
+
+	//Connect to the voltha northbound api
+	a.volthaNbiClient = clients.NewVolthaNbiClient(a.conf.VolthaNbiEndpoint)
+	if err = a.volthaNbiClient.Connect(ctx, a.conf.TlsEnabled, a.conf.TlsVerify); err != nil {
+		logger.Fatalw(ctx, "failed-to-open-voltha-nbi-grpc-connection", log.Fields{"err": err})
+	} else {
+		probe.UpdateStatusFromContext(ctx, a.conf.VolthaNbiEndpoint, probe.ServiceStatusRunning)
+	}
+
+	//Check if the REST APIs of the olt app are reachable
+	a.oltAppClient = clients.NewOltAppClient(a.conf.OnosRestEndpoint, a.conf.OnosUser, a.conf.OnosPassword)
+	if err := a.oltAppClient.CheckConnection(ctx); err != nil {
+		logger.Fatalw(ctx, "failed-to-connect-to-onos-olt-app-api", log.Fields{"err": err})
+	} else {
+		probe.UpdateStatusFromContext(ctx, a.conf.OnosRestEndpoint, probe.ServiceStatusRunning)
+	}
+
+	//Run the main logic of the BBF adapter
+
+	//Set the service as running, making the adapter finally ready
+	probe.UpdateStatusFromContext(ctx, bbfAdapterService, probe.ServiceStatusRunning)
+	logger.Info(ctx, "bbf-adapter-ready")
+
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info(ctx, "stop-for-context-done")
+			break loop
+		case <-time.After(15 * time.Second):
+			//TODO: this is just to test functionality
+
+			//Make a request to voltha
+			devices, err := a.volthaNbiClient.Service.ListDevices(ctx, &empty.Empty{})
+			if err != nil {
+				logger.Errorw(ctx, "failed-to-list-devices", log.Fields{"err": err})
+				continue
+			}
+			logger.Debugw(ctx, "Got devices from VOLTHA", log.Fields{"devNum": len(devices.Items)})
+
+			//Make a request to Olt app
+			response, err := a.oltAppClient.GetStatus()
+			if err != nil {
+				logger.Errorw(ctx, "failed-to-get-status", log.Fields{
+					"err":     err,
+					"reponse": response,
+				})
+				continue
+			} else {
+				logger.Debugw(ctx, "Got status from OltApp", log.Fields{"response": response})
+			}
+
+			logger.Warn(ctx, "BBF Adapter currently has no implemented logic.")
+		}
+	}
+
+	probe.UpdateStatusFromContext(ctx, bbfAdapterService, probe.ServiceStatusStopped)
+	wg.Done()
+}
+
+//Close all connections of the adapter
+func (a *bbfAdapter) cleanup() {
+	a.volthaNbiClient.Close()
+}
 
 func printBanner() {
 	fmt.Println("  ____  ____  ______               _             _            ")
@@ -80,7 +163,8 @@ func waitForExit(ctx context.Context) int {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
 	start := time.Now()
 
 	conf := config.LoadConfig(ctx)
@@ -126,7 +210,15 @@ func main() {
 	p := &probe.Probe{}
 	go p.ListenAndServe(ctx, conf.ProbeAddress)
 
+	//Register all services that will need to be initialized before considering the adapter ready
 	probeCtx := context.WithValue(ctx, probe.ProbeContextKey, p)
+	p.RegisterService(
+		ctx,
+		bbfAdapterService,
+		conf.VolthaNbiEndpoint,
+		conf.OnosRestEndpoint,
+	)
+
 	closer, err := log.GetGlobalLFM().InitTracingAndLogCorrelation(conf.TraceEnabled, conf.TraceAgentAddress, conf.LogCorrelationEnabled)
 	if err != nil {
 		logger.Warnw(ctx, "unable-to-initialize-tracing-and-log-correlation-module", log.Fields{"error": err})
@@ -134,28 +226,22 @@ func main() {
 		defer log.TerminateTracing(closer)
 	}
 
-	//Configure readiness probe
-	p.RegisterService(
-		probeCtx,
-		bbfAdapterService,
-	)
+	adapter := newBbfAdapter(conf)
 
-	go func() {
-		probe.UpdateStatusFromContext(probeCtx, bbfAdapterService, probe.ServiceStatusRunning)
+	//Run the adapter
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go adapter.start(probeCtx, wg)
+	defer adapter.cleanup()
 
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Info(ctx, "Context closed")
-				break
-			case <-time.After(15 * time.Second):
-				logger.Warn(ctx, "BBF Adapter currently has no implemented logic.")
-			}
-		}
-	}()
-
+	//Wait a signal to stop execution
 	code := waitForExit(ctx)
 	logger.Infow(ctx, "received-a-closing-signal", log.Fields{"code": code})
+
+	//Stop everything that waits for the context to be done
+	cancelCtx()
+	//Wait for the adapter logic to stop
+	wg.Wait()
 
 	elapsed := time.Since(start)
 	logger.Infow(ctx, "run-time", log.Fields{"time": elapsed.Seconds()})
