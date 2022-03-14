@@ -17,10 +17,7 @@
 #-------------
 # Build stage
 
-FROM --platform=linux/amd64 golang:1.16.3-alpine3.13 AS dev
-
-# Install required packages
-RUN apk add --no-cache build-base=0.5-r2
+FROM voltha/bbf-adapter-builder:local AS dev
 
 # Use Standard go build directory structure
 WORKDIR /go/src
@@ -28,7 +25,7 @@ COPY . .
 
 ARG EXTRA_GO_BUILD_TAGS=""
 
-ARG CGO_PARAMETER=0
+ARG CGO_PARAMETER=1
 
 ARG org_label_schema_version=unknown
 ARG org_label_schema_vcs_url=unknown
@@ -38,7 +35,7 @@ ARG org_opencord_vcs_commit_date=unknown
 ARG org_opencord_vcs_dirty=unknown
 
 # Build
-SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
       CGO_ENABLED=$CGO_PARAMETER go build $EXTRA_GO_BUILD_TAGS -mod=vendor -o /app/bbf-adapter \
       -ldflags \
@@ -55,7 +52,41 @@ WORKDIR /app
 
 # -------------
 # Image creation stage
-FROM --platform=linux/amd64 gcr.io/distroless/static:nonroot as prod
+FROM ubuntu:hirsute-20220113 AS prod
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN \
+      apt-get update && \
+      apt-get install -y \
+            wget=1.21-1ubuntu3 ca-certificates=20210119ubuntu0.21.04.1 \
+            libpcre2-8-0=10.36-2ubuntu5 \
+            libcrypt1=1:4.4.17-1ubuntu3 \
+            libssh-4=0.9.5-1ubuntu0.1 \
+            --no-install-recommends && \
+      rm -rf /var/lib/apt/lists/*
+
+# Download and install library packages
+RUN \
+      wget https://github.com/CESNET/libyang/releases/download/v2.0.112/libyang2_2.0.112.1-1_amd64.deb -O libyang2.deb && \
+      wget https://github.com/sysrepo/sysrepo/releases/download/v2.0.53/libsysrepo6_2.0.53.1-1_amd64.deb -O libsysrepo6.deb && \
+      wget https://github.com/sysrepo/sysrepo/releases/download/v2.0.53/sysrepo-tools_2.0.53.1-1_amd64.deb -O sysrepo-tools.deb && \
+      wget https://github.com/CESNET/libnetconf2/releases/download/v2.0.24/libnetconf2-2_2.0.24.1-1_amd64.deb -O libnetconf2-2.deb && \
+      wget https://github.com/CESNET/netopeer2/releases/download/v2.0.35/netopeer2_2.0.35.2-1_amd64.deb -O netopeer2_2.deb
+
+RUN dpkg -i libyang2.deb libsysrepo6.deb sysrepo-tools.deb libnetconf2-2.deb netopeer2_2.deb
+
+RUN rm libyang2.deb libsysrepo6.deb sysrepo-tools.deb libnetconf2-2.deb netopeer2_2.deb
+
+# Copy yang files and install them to sysrepo
+COPY ./build/yang-files /yang
+RUN sysrepoctl -a -i /yang/bbf-device-aggregation.yang -s /yang -p 664 -v3
+
+# Add user for connecting to netopeer2-server through ssh
+ARG NETCONF_USER=voltha
+ARG NETCONF_PASSWORD=onf
+
+RUN useradd -rm -g netconf -u 1001 $NETCONF_USER
+RUN echo $NETCONF_USER:$NETCONF_PASSWORD | chpasswd
 
 # Set the working directory
 WORKDIR /app
@@ -81,4 +112,5 @@ org.label-schema.build-date=$org_label_schema_build_date \
 org.opencord.vcs-commit-date=$org_opencord_vcs_commit_date \
 org.opencord.vcs-dirty=$org_opencord_vcs_dirty
 
-USER nonroot:nonroot
+# running netopeer2-server as a standard user is not supported right now
+# https://github.com/sysrepo/sysrepo/issues/2148#issuecomment-695950173

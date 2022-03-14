@@ -2,6 +2,17 @@
 
 The Northbound BBF Adapter is a translation layer between the VOLTHA Northbound APIs and the BBF yang model, enabling VOLTHA to be integrated into a full fledged BBF Cloud CO deployment.
 
+## Architecture
+
+The Northbound BBF Adapter is implemented as a plugin for the [sysrepo](https://github.com/sysrepo/sysrepo) data store. Using `libsysrepo`, the adapter is able to act upon requests coming from NETCONF clients through the [netopeer2](https://github.com/CESNET/netopeer2) NETCONF server.
+A deployment of the adapter's container includes an instance of netopeer2 and the bbf-adapter process itself.
+
+![bbf-adapter-architecture](docs/images/bbf-adapter-architecture.svg)
+
+## Documentation
+
+For information on how to deploy the BBF Adapter, please refer to [the docs folder](docs/deploy.md).
+
 ## Development `make` targets
 
 The `Makefile` contains many commands that are useful in development:

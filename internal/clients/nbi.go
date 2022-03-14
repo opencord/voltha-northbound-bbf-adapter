@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	vgrpc "github.com/opencord/voltha-lib-go/v7/pkg/grpc"
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
 	"github.com/opencord/voltha-protos/v5/go/voltha"
 	"google.golang.org/grpc"
@@ -31,7 +32,8 @@ import (
 )
 
 const (
-	nbiMaxBackoffInterval = time.Second * 10
+	nbiInitialBackoffInterval = time.Second
+	nbiMaxBackoffInterval     = time.Second * 10
 )
 
 //Used to keep track of a connection to a grpc endpoint of the northbound api
@@ -81,6 +83,7 @@ func (c *VolthaNbiClient) Connect(ctx context.Context, useTls bool, verifyTls bo
 	}
 
 	//Wait for the connection to be successful, with periodic updates on its status
+	backoff := vgrpc.NewBackoff(nbiInitialBackoffInterval, nbiMaxBackoffInterval, vgrpc.DefaultBackoffMaxElapsedTime)
 	for {
 		if state := c.conn.GetState(); state == connectivity.Ready {
 			break
@@ -88,11 +91,8 @@ func (c *VolthaNbiClient) Connect(ctx context.Context, useTls bool, verifyTls bo
 			logger.Warnw(ctx, "voltha-nbi-grpc-not-ready", log.Fields{"state": state})
 		}
 
-		select {
-		case <-ctx.Done():
+		if err := backoff.Backoff(ctx); err != nil {
 			return fmt.Errorf("voltha-nbi-connection-stopped-due-to-context-done")
-		case <-time.After(nbiMaxBackoffInterval):
-			continue
 		}
 	}
 
@@ -104,7 +104,9 @@ func (c *VolthaNbiClient) Connect(ctx context.Context, useTls bool, verifyTls bo
 }
 
 // Closes the connection and cleans up
-func (c *VolthaNbiClient) Close() {
+func (c *VolthaNbiClient) Close(ctx context.Context) {
 	c.conn.Close()
 	c.Service = nil
+
+	logger.Debug(ctx, "closed-voltha-nbi-grpc-connection")
 }

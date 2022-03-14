@@ -2,25 +2,52 @@
 github.com/davecgh/go-spew/spew
 # github.com/golang/protobuf v1.5.2
 ## explicit
+github.com/golang/protobuf/jsonpb
 github.com/golang/protobuf/proto
+github.com/golang/protobuf/protoc-gen-go/descriptor
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/empty
+github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/timestamp
+github.com/golang/protobuf/ptypes/wrappers
+# github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
+github.com/grpc-ecosystem/go-grpc-middleware
+github.com/grpc-ecosystem/go-grpc-middleware/tags
+github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing
+github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
+# github.com/jhump/protoreflect v1.10.2
+github.com/jhump/protoreflect/codec
+github.com/jhump/protoreflect/desc
+github.com/jhump/protoreflect/desc/internal
+github.com/jhump/protoreflect/dynamic
+github.com/jhump/protoreflect/dynamic/grpcdynamic
+github.com/jhump/protoreflect/grpcreflect
+github.com/jhump/protoreflect/internal
+github.com/jhump/protoreflect/internal/codec
 # github.com/opencord/voltha-lib-go/v7 v7.1.5
 ## explicit
+github.com/opencord/voltha-lib-go/v7/pkg/grpc
 github.com/opencord/voltha-lib-go/v7/pkg/log
 github.com/opencord/voltha-lib-go/v7/pkg/probe
 github.com/opencord/voltha-lib-go/v7/pkg/version
 # github.com/opencord/voltha-protos/v5 v5.2.3
 ## explicit
+github.com/opencord/voltha-protos/v5/go/adapter_service
 github.com/opencord/voltha-protos/v5/go/common
+github.com/opencord/voltha-protos/v5/go/core_adapter
+github.com/opencord/voltha-protos/v5/go/core_service
 github.com/opencord/voltha-protos/v5/go/ext/config
 github.com/opencord/voltha-protos/v5/go/extension
 github.com/opencord/voltha-protos/v5/go/health
+github.com/opencord/voltha-protos/v5/go/inter_adapter
+github.com/opencord/voltha-protos/v5/go/olt_inter_adapter_service
 github.com/opencord/voltha-protos/v5/go/omci
+github.com/opencord/voltha-protos/v5/go/onu_inter_adapter_service
 github.com/opencord/voltha-protos/v5/go/openflow_13
+github.com/opencord/voltha-protos/v5/go/openolt
+github.com/opencord/voltha-protos/v5/go/tech_profile
 github.com/opencord/voltha-protos/v5/go/voltha
 # github.com/opentracing/opentracing-go v1.2.0
 github.com/opentracing/opentracing-go
@@ -66,6 +93,7 @@ go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
 # golang.org/x/net v0.0.0-20210614182718-04defd469f4e
+golang.org/x/net/context
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
@@ -115,18 +143,22 @@ google.golang.org/grpc/keepalive
 google.golang.org/grpc/metadata
 google.golang.org/grpc/naming
 google.golang.org/grpc/peer
+google.golang.org/grpc/reflection
+google.golang.org/grpc/reflection/grpc_reflection_v1alpha
 google.golang.org/grpc/resolver
 google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
 # google.golang.org/protobuf v1.27.1
+google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
 google.golang.org/protobuf/internal/descopts
 google.golang.org/protobuf/internal/detrand
 google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/json
 google.golang.org/protobuf/internal/encoding/messageset
 google.golang.org/protobuf/internal/encoding/tag
 google.golang.org/protobuf/internal/encoding/text
@@ -151,7 +183,9 @@ google.golang.org/protobuf/types/descriptorpb
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/emptypb
+google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
+google.golang.org/protobuf/types/known/wrapperspb
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 gopkg.in/yaml.v3
 # github.com/coreos/bbolt v1.3.4 => go.etcd.io/bbolt v1.3.4

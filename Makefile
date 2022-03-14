@@ -49,13 +49,26 @@ DOCKER_BUILD_ARGS ?= \
 # tool containers
 VOLTHA_TOOLS_VERSION ?= 2.5.3
 
-GO                = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-golang go
-GO_JUNIT_REPORT   = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app -i voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-go-junit-report go-junit-report
-GOCOVER_COBERTURA = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app/src/github.com/opencord/voltha-northbound-bbf-adapter -i voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-gocover-cobertura gocover-cobertura
-GOLANGCI_LINT     = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-golangci-lint golangci-lint
-HADOLINT          = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-hadolint hadolint
+# This container is built to include the necessary sysrepo libraries
+# to succesfully build and test the code in this repository
+BUILDER_IMAGE_AND_TAG ?= voltha/bbf-adapter-builder:local 
+build-tools: build/tools/Dockerfile.builder
+	docker build \
+	  -t ${BUILDER_IMAGE_AND_TAG} \
+	  -f build/tools/Dockerfile.builder .
 
-.PHONY: docker-build local-protos local-lib-go help
+GO_LOCAL_BUILDER            = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg ${BUILDER_IMAGE_AND_TAG} go
+GO                          = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-golang go
+GO_JUNIT_REPORT             = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app -i voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-go-junit-report go-junit-report
+GOCOVER_COBERTURA           = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app/src/github.com/opencord/voltha-northbound-bbf-adapter -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-gocover-cobertura gocover-cobertura
+GOLANGCI_LINT_LOCAL_BUILDER = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg ${BUILDER_IMAGE_AND_TAG} golangci-lint
+HADOLINT                    = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-hadolint hadolint
+
+# Default user and password for the netconf user in docker-build
+NETCONF_USER ?= voltha
+NETCONF_PASSWORD ?= onf
+
+.PHONY: docker-build local-protos local-lib-go help test sca
 .DEFAULT_GOAL := help
 
 help: ## Print help for each Makefile target
@@ -87,10 +100,12 @@ endif
 ## Docker targets
 build: docker-build ## Alias for 'docker build'
 
-docker-build: local-lib-go ## Build the BBF Adapter docker container
+docker-build: local-lib-go build-tools ## Build the BBF Adapter docker container
 	docker build \
 	  -t ${DOCKER_REGISTRY}${DOCKER_REPOSITORY}voltha-northbound-bbf-adapter:${DOCKER_TAG} \
-	  -f build/package/Dockerfile.bbf-adapter .
+	  -f build/package/Dockerfile.bbf-adapter . \
+	  --build-arg NETCONF_USER=${NETCONF_USER} \
+	  --build-arg NETCONF_PASSWORD=${NETCONF_PASSWORD}
 
 docker-push: ## Push the docker images to an external repository
 	docker push ${ADAPTER_IMAGENAME}
@@ -105,9 +120,9 @@ docker-kind-load: ## Load docker images into a KinD cluster
 	@if [ "`kind get clusters | grep voltha-$(TYPE)`" = '' ]; then echo "no voltha-$(TYPE) cluster found" && exit 1; fi
 	kind load docker-image ${ADAPTER_IMAGENAME} --name=voltha-$(TYPE) --nodes $(shell kubectl get nodes --template='{{range .items}}{{.metadata.name}},{{end}}' | sed 's/,$$//')
 
-test: ## Run unit tests
+test: build-tools ## Run unit tests
 	@mkdir -p ./tests/results
-	@${GO} test -mod=vendor -v -coverprofile ./tests/results/go-test-coverage.out -covermode count ./... 2>&1 | tee ./tests/results/go-test-results.out ;\
+	@${GO_LOCAL_BUILDER} test -mod=vendor -v -coverprofile ./tests/results/go-test-coverage.out -covermode count ./... 2>&1 | tee ./tests/results/go-test-results.out ;\
 	RETURN=$$? ;\
 	${GO_JUNIT_REPORT} < ./tests/results/go-test-results.out > ./tests/results/go-test-results.xml ;\
 	${GOCOVER_COBERTURA} < ./tests/results/go-test-coverage.out > ./tests/results/go-test-coverage.xml ;\
@@ -134,11 +149,11 @@ lint-mod: ## Verify the Go dependencies
 	@[[ `git ls-files --exclude-standard --others go.mod go.sum vendor` == "" ]] || (echo "ERROR: Untracked files detected after running go mod tidy / go mod vendor" && git status -- go.mod go.sum vendor && git checkout -- go.mod go.sum vendor && exit 1)
 	@echo "Vendor check OK."
 
-sca: ## Runs static code analysis with the golangci-lint tool
+sca: build-tools ## Runs static code analysis with the golangci-lint tool
 	@rm -rf ./sca-report
 	@mkdir -p ./sca-report
 	@echo "Running static code analysis..."
-	@${GOLANGCI_LINT} run --deadline=6m --out-format junit-xml ./... | tee ./sca-report/sca-report.xml
+	@${GOLANGCI_LINT_LOCAL_BUILDER} run --deadline=6m --out-format junit-xml ./... | tee ./sca-report/sca-report.xml
 	@echo ""
 	@echo "Static code analysis OK"
 

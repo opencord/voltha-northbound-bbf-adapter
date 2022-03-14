@@ -29,19 +29,22 @@ import (
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
 	"github.com/opencord/voltha-lib-go/v7/pkg/probe"
 	"github.com/opencord/voltha-lib-go/v7/pkg/version"
-	clients "github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
+	"github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
 	"github.com/opencord/voltha-northbound-bbf-adapter/internal/config"
+	"github.com/opencord/voltha-northbound-bbf-adapter/internal/sysrepo"
 )
 
 //String for readiness probe services
 const (
 	bbfAdapterService = "bbf-adapter-service"
+	sysrepoService    = "sysrepo"
 )
 
 type bbfAdapter struct {
 	conf            *config.BBFAdapterConfig
 	volthaNbiClient *clients.VolthaNbiClient
 	oltAppClient    *clients.OltAppClient
+	sysrepoPlugin   *sysrepo.SysrepoPlugin
 }
 
 func newBbfAdapter(conf *config.BBFAdapterConfig) *bbfAdapter {
@@ -67,6 +70,14 @@ func (a *bbfAdapter) start(ctx context.Context, wg *sync.WaitGroup) {
 		logger.Fatalw(ctx, "failed-to-connect-to-onos-olt-app-api", log.Fields{"err": err})
 	} else {
 		probe.UpdateStatusFromContext(ctx, a.conf.OnosRestEndpoint, probe.ServiceStatusRunning)
+	}
+
+	//Load sysrepo plugin
+	a.sysrepoPlugin, err = sysrepo.StartNewPlugin(ctx)
+	if err != nil {
+		logger.Fatalw(ctx, "failed-to-start-sysrepo-plugin", log.Fields{"err": err})
+	} else {
+		probe.UpdateStatusFromContext(ctx, sysrepoService, probe.ServiceStatusRunning)
 	}
 
 	//Run the main logic of the BBF adapter
@@ -113,8 +124,12 @@ loop:
 }
 
 //Close all connections of the adapter
-func (a *bbfAdapter) cleanup() {
-	a.volthaNbiClient.Close()
+func (a *bbfAdapter) cleanup(ctx context.Context) {
+	a.volthaNbiClient.Close(ctx)
+	err := a.sysrepoPlugin.Stop(ctx)
+	if err != nil {
+		logger.Errorw(ctx, "failed-to-stop-sysrepo-plugin", log.Fields{"err": err})
+	}
 }
 
 func printBanner() {
@@ -217,6 +232,7 @@ func main() {
 		bbfAdapterService,
 		conf.VolthaNbiEndpoint,
 		conf.OnosRestEndpoint,
+		sysrepoService,
 	)
 
 	closer, err := log.GetGlobalLFM().InitTracingAndLogCorrelation(conf.TraceEnabled, conf.TraceAgentAddress, conf.LogCorrelationEnabled)
@@ -232,7 +248,7 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go adapter.start(probeCtx, wg)
-	defer adapter.cleanup()
+	defer adapter.cleanup(probeCtx)
 
 	//Wait a signal to stop execution
 	code := waitForExit(ctx)
