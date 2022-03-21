@@ -79,7 +79,7 @@ RUN rm libyang2.deb libsysrepo6.deb sysrepo-tools.deb libnetconf2-2.deb netopeer
 
 # Copy yang files and install them to sysrepo
 COPY ./build/yang-files /yang
-RUN sysrepoctl -a -i /yang/bbf-device-aggregation.yang -s /yang -p 664 -v3
+RUN for f in /yang/*.yang; do sysrepoctl -a -i "$f" -s /yang -p 664 -v3; done
 
 # Add user for connecting to netopeer2-server through ssh
 ARG NETCONF_USER=voltha

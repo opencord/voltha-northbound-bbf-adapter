@@ -9,9 +9,23 @@ A deployment of the adapter's container includes an instance of netopeer2 and th
 
 ![bbf-adapter-architecture](docs/images/bbf-adapter-architecture.svg)
 
-## Documentation
+## Deployment
 
-For information on how to deploy the BBF Adapter, please refer to [the docs folder](docs/deploy.md).
+For information on how to deploy the BBF Adapter, please refer to [deploy.md](docs/deploy.md) in the [docs](docs/README.md) folder.
+
+## Building
+
+The default credentials used to authenticate to the netopeer2 server in the BBF adapter's container are `voltha:onf`.
+
+An image with custom credentials can be built by running the following command:
+
+```
+NETCONF_USER=<username> NETCONF_PASSWORD=<password> make build
+```
+
+## Additional doucmentation
+
+Further documentation for the adapter's development can be found in the [docs](docs/README.md) folder.
 
 ## Development `make` targets
 

@@ -14,16 +14,22 @@
 * limitations under the License.
  */
 
+#include <libyang/libyang.h>
 #include <sysrepo.h>
 #include <sysrepo/xpath.h>
 
 //Needed to handle callback functions with a working data type in CGO
 typedef void (*function)(); // https://golang.org/issue/19835
 
-//Exported by sysrepo.go
-void get_data_cb();
+//CGO can't see raw structs
+typedef struct lyd_node lyd_node;
 
-int get_data_cb_wrapper(
+//Exported by sysrepo.go
+sr_error_t get_devices_cb(sr_session_ctx_t *session, lyd_node **parent);
+
+//The wrapper function is needed because CGO cannot express const char*
+//and thus it can't match sysrepo's callback signature
+int get_devices_cb_wrapper(
     sr_session_ctx_t *session,
     uint32_t subscription_id,
     const char *module_name,
@@ -33,7 +39,5 @@ int get_data_cb_wrapper(
     struct lyd_node **parent,
     void *private_data)
 {
-    get_data_cb();
-
-    return SR_ERR_OK;
+    return get_devices_cb(session, parent);
 }

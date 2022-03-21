@@ -13,7 +13,7 @@ The adapter's chart can be installed with the following command, assuming the vo
 
 ```
 helm upgrade --install --create-namespace -n voltha bbf \
-            onf/voltha-northbound-bbf-adapter/ --devel \
+            onf/voltha-northbound-bbf-adapter --devel \
             --set global.voltha_infra_name=voltha-infra \
             --set global.voltha_infra_namespace=infra \
             --set global.voltha_stack_name=voltha \
@@ -54,10 +54,8 @@ When presented with the server's fingerprint, confirm by entering `yes`, and the
 After a successful login, a request can be performed:
 
 ```
-get-data --datastore operational --filter-xpath /bbf-device-aggregation:devices
+get-data --datastore operational --filter-xpath /bbf-device-aggregation:*
 ```
-
-The adapter doesn't perform request translations yet, but the success of the operation can be inferred by looking at the container's logs, which will show a `>>>>>>>RECEIVED REQUEST FROM SYSREPO<<<<<<<` message.
 
 ## Stop the BBF adapter
 ```

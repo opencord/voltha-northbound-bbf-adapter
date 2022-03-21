@@ -21,16 +21,15 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
 	"github.com/opencord/voltha-lib-go/v7/pkg/probe"
 	"github.com/opencord/voltha-lib-go/v7/pkg/version"
 	"github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
 	"github.com/opencord/voltha-northbound-bbf-adapter/internal/config"
+	"github.com/opencord/voltha-northbound-bbf-adapter/internal/core"
 	"github.com/opencord/voltha-northbound-bbf-adapter/internal/sysrepo"
 )
 
@@ -53,7 +52,7 @@ func newBbfAdapter(conf *config.BBFAdapterConfig) *bbfAdapter {
 	}
 }
 
-func (a *bbfAdapter) start(ctx context.Context, wg *sync.WaitGroup) {
+func (a *bbfAdapter) start(ctx context.Context) {
 	var err error
 
 	//Connect to the voltha northbound api
@@ -72,6 +71,9 @@ func (a *bbfAdapter) start(ctx context.Context, wg *sync.WaitGroup) {
 		probe.UpdateStatusFromContext(ctx, a.conf.OnosRestEndpoint, probe.ServiceStatusRunning)
 	}
 
+	//Create the global adapter that will be used by callbacks
+	core.AdapterInstance = core.NewVolthaYangAdapter(a.volthaNbiClient, a.oltAppClient)
+
 	//Load sysrepo plugin
 	a.sysrepoPlugin, err = sysrepo.StartNewPlugin(ctx)
 	if err != nil {
@@ -80,56 +82,23 @@ func (a *bbfAdapter) start(ctx context.Context, wg *sync.WaitGroup) {
 		probe.UpdateStatusFromContext(ctx, sysrepoService, probe.ServiceStatusRunning)
 	}
 
-	//Run the main logic of the BBF adapter
-
 	//Set the service as running, making the adapter finally ready
 	probe.UpdateStatusFromContext(ctx, bbfAdapterService, probe.ServiceStatusRunning)
 	logger.Info(ctx, "bbf-adapter-ready")
-
-loop:
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info(ctx, "stop-for-context-done")
-			break loop
-		case <-time.After(15 * time.Second):
-			//TODO: this is just to test functionality
-
-			//Make a request to voltha
-			devices, err := a.volthaNbiClient.Service.ListDevices(ctx, &empty.Empty{})
-			if err != nil {
-				logger.Errorw(ctx, "failed-to-list-devices", log.Fields{"err": err})
-				continue
-			}
-			logger.Debugw(ctx, "Got devices from VOLTHA", log.Fields{"devNum": len(devices.Items)})
-
-			//Make a request to Olt app
-			response, err := a.oltAppClient.GetStatus()
-			if err != nil {
-				logger.Errorw(ctx, "failed-to-get-status", log.Fields{
-					"err":     err,
-					"reponse": response,
-				})
-				continue
-			} else {
-				logger.Debugw(ctx, "Got status from OltApp", log.Fields{"response": response})
-			}
-
-			logger.Warn(ctx, "BBF Adapter currently has no implemented logic.")
-		}
-	}
-
-	probe.UpdateStatusFromContext(ctx, bbfAdapterService, probe.ServiceStatusStopped)
-	wg.Done()
 }
 
 //Close all connections of the adapter
 func (a *bbfAdapter) cleanup(ctx context.Context) {
+	core.AdapterInstance = nil
+
 	a.volthaNbiClient.Close(ctx)
+
 	err := a.sysrepoPlugin.Stop(ctx)
 	if err != nil {
 		logger.Errorw(ctx, "failed-to-stop-sysrepo-plugin", log.Fields{"err": err})
 	}
+
+	probe.UpdateStatusFromContext(ctx, bbfAdapterService, probe.ServiceStatusStopped)
 }
 
 func printBanner() {
@@ -245,9 +214,7 @@ func main() {
 	adapter := newBbfAdapter(conf)
 
 	//Run the adapter
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go adapter.start(probeCtx, wg)
+	adapter.start(probeCtx)
 	defer adapter.cleanup(probeCtx)
 
 	//Wait a signal to stop execution
@@ -256,8 +223,6 @@ func main() {
 
 	//Stop everything that waits for the context to be done
 	cancelCtx()
-	//Wait for the adapter logic to stop
-	wg.Wait()
 
 	elapsed := time.Since(start)
 	logger.Infow(ctx, "run-time", log.Fields{"time": elapsed.Seconds()})
