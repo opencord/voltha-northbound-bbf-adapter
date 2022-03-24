@@ -16,7 +16,6 @@
 
 package sysrepo
 
-//#cgo CFLAGS: -I/usr/include
 //#cgo LDFLAGS: -lsysrepo -lyang -Wl,--allow-multiple-definition
 //#include "plugin.c"
 import "C"
@@ -53,7 +52,7 @@ func updateYangItems(ctx context.Context, session *C.sr_session_ctx_t, parent **
 	}
 
 	//libyang context
-	ly_ctx := C.sr_get_context(conn)
+	ly_ctx := C.sr_acquire_context(conn)
 	if ly_ctx == nil {
 		return fmt.Errorf("null-libyang-context")
 	}
@@ -68,7 +67,12 @@ func updateYangItems(ctx context.Context, session *C.sr_session_ctx_t, parent **
 		if lyErr != C.LY_SUCCESS {
 			freeCString(path)
 			freeCString(value)
-			return fmt.Errorf("libyang-new-path-failed: %d", lyErr)
+
+			lyErrString := C.ly_errmsg(ly_ctx)
+			err := fmt.Errorf("libyang-new-path-failed: %d %s", lyErr, C.GoString(lyErrString))
+			freeCString(lyErrString)
+
+			return err
 		}
 
 		freeCString(path)
@@ -164,13 +168,13 @@ func StartNewPlugin(ctx context.Context) (*SysrepoPlugin, error) {
 	path := C.CString(core.DevicesPath + "/*")
 	defer freeCString(path)
 
-	errCode := C.sr_oper_get_items_subscribe(
+	errCode := C.sr_oper_get_subscribe(
 		plugin.session,
 		module,
 		path,
 		C.function(C.get_devices_cb_wrapper),
 		C.NULL,
-		C.SR_SUBSCR_CTX_REUSE,
+		C.SR_SUBSCR_DEFAULT,
 		&plugin.subscription,
 	)
 	if errCode != C.SR_ERR_OK {

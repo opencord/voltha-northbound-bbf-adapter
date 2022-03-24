@@ -35,7 +35,7 @@ ARG org_opencord_vcs_commit_date=unknown
 ARG org_opencord_vcs_dirty=unknown
 
 # Build
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN \
       CGO_ENABLED=$CGO_PARAMETER go build $EXTRA_GO_BUILD_TAGS -mod=vendor -o /app/bbf-adapter \
       -ldflags \
@@ -52,40 +52,64 @@ WORKDIR /app
 
 # -------------
 # Image creation stage
-FROM ubuntu:hirsute-20220113 AS prod
+FROM alpine:3.13 AS prod
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN \
-      apt-get update && \
-      apt-get install -y \
-            wget=1.21-1ubuntu3 ca-certificates=20210119ubuntu0.21.04.1 \
-            libpcre2-8-0=10.36-2ubuntu5 \
-            libcrypt1=1:4.4.17-1ubuntu3 \
-            libssh-4=0.9.5-1ubuntu0.1 \
-            --no-install-recommends && \
-      rm -rf /var/lib/apt/lists/*
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
-# Download and install library packages
-RUN \
-      wget https://github.com/CESNET/libyang/releases/download/v2.0.112/libyang2_2.0.112.1-1_amd64.deb -O libyang2.deb && \
-      wget https://github.com/sysrepo/sysrepo/releases/download/v2.0.53/libsysrepo6_2.0.53.1-1_amd64.deb -O libsysrepo6.deb && \
-      wget https://github.com/sysrepo/sysrepo/releases/download/v2.0.53/sysrepo-tools_2.0.53.1-1_amd64.deb -O sysrepo-tools.deb && \
-      wget https://github.com/CESNET/libnetconf2/releases/download/v2.0.24/libnetconf2-2_2.0.24.1-1_amd64.deb -O libnetconf2-2.deb && \
-      wget https://github.com/CESNET/netopeer2/releases/download/v2.0.35/netopeer2_2.0.35.2-1_amd64.deb -O netopeer2_2.deb
+RUN apk add --no-cache build-base=0.5-r2 pcre2-dev=10.36-r0 git=2.30.2-r0 cmake=3.18.4-r1 libssh-dev=0.9.5-r0 openssl-dev=1.1.1n-r0 openssl=1.1.1n-r0 bash=5.1.16-r0
 
-RUN dpkg -i libyang2.deb libsysrepo6.deb sysrepo-tools.deb libnetconf2-2.deb netopeer2_2.deb
+RUN rm -r /usr/local/lib && ln -s /usr/local/lib64 /usr/local/lib
 
-RUN rm libyang2.deb libsysrepo6.deb sysrepo-tools.deb libnetconf2-2.deb netopeer2_2.deb
+WORKDIR /
+
+COPY --from=dev /libyang /libyang
+COPY --from=dev /sysrepo /sysrepo
+
+#Build libyang
+WORKDIR /libyang/build
+RUN make install && \
+    rm -rf libyang
+
+#Build sysrepo
+WORKDIR /sysrepo/build
+RUN make install && \
+    rm -rf sysrepo
+
+ARG LIBNETCONF2_VERSION
+ARG NETOPEER2_VERSION
+
+#Build libnetconf2
+WORKDIR /
+RUN git clone https://github.com/CESNET/libnetconf2.git
+WORKDIR /libnetconf2
+RUN git checkout $LIBNETCONF2_VERSION && mkdir build
+WORKDIR /libnetconf2/build
+RUN cmake -D CMAKE_BUILD_TYPE:String="Release" .. && \
+    make && \
+    make install && \
+    rm -rf libnetconf2
+
+#Build netopeer2
+WORKDIR /
+RUN git clone https://github.com/CESNET/netopeer2.git
+WORKDIR /netopeer2
+RUN git checkout $NETOPEER2_VERSION && mkdir build
+WORKDIR /netopeer2/build
+RUN cmake -D CMAKE_BUILD_TYPE:String="Release" .. && \
+    make && \
+    make install && \
+    rm -rf netopeer2
 
 # Copy yang files and install them to sysrepo
 COPY ./build/yang-files /yang
-RUN for f in /yang/*.yang; do sysrepoctl -a -i "$f" -s /yang -p 664 -v3; done
+RUN for f in /yang/*.yang; do sysrepoctl -i "$f" -s /yang -p 664 -v3; done
 
 # Add user for connecting to netopeer2-server through ssh
 ARG NETCONF_USER=voltha
 ARG NETCONF_PASSWORD=onf
 
-RUN useradd -rm -g netconf -u 1001 $NETCONF_USER
+RUN addgroup -S netconf
+RUN adduser $NETCONF_USER --uid 1001 -G netconf --disabled-password
 RUN echo $NETCONF_USER:$NETCONF_PASSWORD | chpasswd
 
 # Set the working directory

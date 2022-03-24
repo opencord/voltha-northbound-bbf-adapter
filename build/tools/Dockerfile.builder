@@ -15,27 +15,38 @@
 # Dockerfile with golang and the sysrepo dependencies for voltha-northbound-bff-adapter
 # This image is used for testing, static code analysis and building
 
-FROM --platform=linux/amd64 golang:1.16.3-buster AS dev
+FROM --platform=linux/amd64 golang:1.16.3-alpine3.13 AS dev
 
 RUN mkdir -m 777 /.cache /go/pkg
+
+RUN apk add --no-cache build-base=0.5-r2 pcre2-dev=10.36-r0 git=2.30.2-r0 cmake=3.18.4-r1
 
 #Install golangci-lint
 RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.2
 
-RUN \
-    apt-get update && apt-get install -y libpcre2-dev=10.32-5 --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
 
-# Download and install library packages
-RUN \
-    wget https://github.com/CESNET/libyang/releases/download/v2.0.112/libyang2_2.0.112.1-1_amd64.deb -O libyang2.deb && \
-    wget https://github.com/CESNET/libyang/releases/download/v2.0.112/libyang2-dev_2.0.112.1-1_amd64.deb -O libyang2-dev.deb && \
-    wget https://github.com/sysrepo/sysrepo/releases/download/v2.0.53/libsysrepo6_2.0.53.1-1_amd64.deb -O libsysrepo6.deb && \
-    wget https://github.com/sysrepo/sysrepo/releases/download/v2.0.53/libsysrepo-dev_2.0.53.1-1_amd64.deb -O libsysrepo-dev.deb
+ARG LIBYANG_VERSION
+ARG SYSREPO_VERSION
 
-RUN dpkg -i libyang2.deb libyang2-dev.deb libsysrepo6.deb libsysrepo-dev.deb
+#Build libyang
+WORKDIR /
+RUN git clone https://github.com/CESNET/libyang.git
+WORKDIR /libyang
+RUN git checkout $LIBYANG_VERSION && mkdir build
+WORKDIR /libyang/build
+RUN cmake -D CMAKE_BUILD_TYPE:String="Release" .. && \
+    make && \
+    make install
 
-RUN rm libyang2.deb libyang2-dev.deb libsysrepo6.deb libsysrepo-dev.deb
+#Build sysrepo
+WORKDIR /
+RUN git clone https://github.com/sysrepo/sysrepo.git
+WORKDIR /sysrepo
+RUN git checkout $SYSREPO_VERSION && mkdir build
+WORKDIR /sysrepo/build
+RUN cmake -D CMAKE_BUILD_TYPE:String="Release" .. && \
+    make && \
+    make install
 
 WORKDIR /app
 

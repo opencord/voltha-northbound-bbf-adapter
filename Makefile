@@ -49,13 +49,25 @@ DOCKER_BUILD_ARGS ?= \
 # tool containers
 VOLTHA_TOOLS_VERSION ?= 2.5.3
 
+# Dependencies versions
+LIBYANG_VERSION		?= v2.0.164
+SYSREPO_VERSION		?= v2.1.42
+LIBNETCONF2_VERSION	?= v2.1.7
+NETOPEER2_VERSION	?= v2.1.16
+
+# Default user and password for the netconf user in docker-build
+NETCONF_USER ?= voltha
+NETCONF_PASSWORD ?= onf
+
 # This container is built to include the necessary sysrepo libraries
 # to succesfully build and test the code in this repository
 BUILDER_IMAGE_AND_TAG ?= voltha/bbf-adapter-builder:local 
 build-tools: build/tools/Dockerfile.builder
 	docker build \
 	  -t ${BUILDER_IMAGE_AND_TAG} \
-	  -f build/tools/Dockerfile.builder .
+	  -f build/tools/Dockerfile.builder . \
+	  --build-arg LIBYANG_VERSION=${LIBYANG_VERSION} \
+	  --build-arg SYSREPO_VERSION=${SYSREPO_VERSION}
 
 GO_LOCAL_BUILDER            = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg ${BUILDER_IMAGE_AND_TAG} go
 GO                          = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-golang go
@@ -63,10 +75,6 @@ GO_JUNIT_REPORT             = docker run --rm --user $$(id -u):$$(id -g) -v ${CU
 GOCOVER_COBERTURA           = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app/src/github.com/opencord/voltha-northbound-bbf-adapter -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-gocover-cobertura gocover-cobertura
 GOLANGCI_LINT_LOCAL_BUILDER = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") -v gocache:/.cache -v gocache-${VOLTHA_TOOLS_VERSION}:/go/pkg ${BUILDER_IMAGE_AND_TAG} golangci-lint
 HADOLINT                    = docker run --rm --user $$(id -u):$$(id -g) -v ${CURDIR}:/app $(shell test -t 0 && echo "-it") voltha/voltha-ci-tools:${VOLTHA_TOOLS_VERSION}-hadolint hadolint
-
-# Default user and password for the netconf user in docker-build
-NETCONF_USER ?= voltha
-NETCONF_PASSWORD ?= onf
 
 .PHONY: docker-build local-protos local-lib-go help test sca
 .DEFAULT_GOAL := help
@@ -105,7 +113,9 @@ docker-build: local-lib-go build-tools ## Build the BBF Adapter docker container
 	  -t ${DOCKER_REGISTRY}${DOCKER_REPOSITORY}voltha-northbound-bbf-adapter:${DOCKER_TAG} \
 	  -f build/package/Dockerfile.bbf-adapter . \
 	  --build-arg NETCONF_USER=${NETCONF_USER} \
-	  --build-arg NETCONF_PASSWORD=${NETCONF_PASSWORD}
+	  --build-arg NETCONF_PASSWORD=${NETCONF_PASSWORD} \
+	  --build-arg LIBNETCONF2_VERSION=${LIBNETCONF2_VERSION} \
+	  --build-arg NETOPEER2_VERSION=${NETOPEER2_VERSION}
 
 docker-push: ## Push the docker images to an external repository
 	docker push ${ADAPTER_IMAGENAME}
