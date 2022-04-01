@@ -19,61 +19,8 @@
 
 FROM voltha/bbf-adapter-builder:local AS dev
 
-# Use Standard go build directory structure
-WORKDIR /go/src
-COPY . .
-
-ARG EXTRA_GO_BUILD_TAGS=""
-
-ARG CGO_PARAMETER=1
-
-ARG org_label_schema_version=unknown
-ARG org_label_schema_vcs_url=unknown
-ARG org_label_schema_vcs_ref=unknown
-ARG org_label_schema_build_date=unknown
-ARG org_opencord_vcs_commit_date=unknown
-ARG org_opencord_vcs_dirty=unknown
-
-# Build
-SHELL ["/bin/ash", "-o", "pipefail", "-c"]
-RUN \
-      CGO_ENABLED=$CGO_PARAMETER go build $EXTRA_GO_BUILD_TAGS -mod=vendor -o /app/bbf-adapter \
-      -ldflags \
-      "-X github.com/opencord/voltha-lib-go/v7/pkg/version.version=$org_label_schema_version \
-      -X github.com/opencord/voltha-lib-go/v7/pkg/version.vcsRef=$org_label_schema_vcs_ref \
-      -X github.com/opencord/voltha-lib-go/v7/pkg/version.vcsDirty=$org_opencord_vcs_dirty \
-      -X github.com/opencord/voltha-lib-go/v7/pkg/version.goVersion=$(go version 2>&1 | sed -E  's/.*go([0-9]+\.[0-9]+\.[0-9]+).*/\1/g') \
-      -X github.com/opencord/voltha-lib-go/v7/pkg/version.os=$(go env GOHOSTOS) \
-      -X github.com/opencord/voltha-lib-go/v7/pkg/version.arch=$(go env GOHOSTARCH) \
-      -X github.com/opencord/voltha-lib-go/v7/pkg/version.buildTime=$org_label_schema_build_date" \
-      ./cmd/bbf-adapter/
-
-WORKDIR /app
-
-# -------------
-# Image creation stage
-FROM alpine:3.13 AS prod
-
-SHELL ["/bin/ash", "-o", "pipefail", "-c"]
-
-RUN apk add --no-cache build-base=0.5-r2 pcre2-dev=10.36-r0 git=2.30.2-r0 cmake=3.18.4-r1 libssh-dev=0.9.5-r0 openssl-dev=1.1.1n-r0 openssl=1.1.1n-r0 bash=5.1.16-r0
-
-RUN rm -r /usr/local/lib && ln -s /usr/local/lib64 /usr/local/lib
-
-WORKDIR /
-
-COPY --from=dev /libyang /libyang
-COPY --from=dev /sysrepo /sysrepo
-
-#Build libyang
-WORKDIR /libyang/build
-RUN make install && \
-    rm -rf libyang
-
-#Build sysrepo
-WORKDIR /sysrepo/build
-RUN make install && \
-    rm -rf sysrepo
+#Build runtime dependencies
+RUN apk add --no-cache libssh-dev=0.9.5-r0 openssl-dev=1.1.1n-r0 openssl=1.1.1n-r0 bash=5.1.16-r0
 
 ARG LIBNETCONF2_VERSION
 ARG NETOPEER2_VERSION
@@ -99,6 +46,52 @@ RUN cmake -D CMAKE_BUILD_TYPE:String="Release" .. && \
     make && \
     make install && \
     rm -rf netopeer2
+
+# Use Standard go build directory structure
+WORKDIR /go/src
+COPY . .
+
+ARG EXTRA_GO_BUILD_TAGS=""
+
+ARG CGO_PARAMETER=1
+
+ARG org_label_schema_version=unknown
+ARG org_label_schema_vcs_url=unknown
+ARG org_label_schema_vcs_ref=unknown
+ARG org_label_schema_build_date=unknown
+ARG org_opencord_vcs_commit_date=unknown
+ARG org_opencord_vcs_dirty=unknown
+
+# Build bbf-adapter
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+RUN \
+      CGO_ENABLED=$CGO_PARAMETER go build $EXTRA_GO_BUILD_TAGS -mod=vendor -o /app/bbf-adapter \
+      -ldflags \
+      "-X github.com/opencord/voltha-lib-go/v7/pkg/version.version=$org_label_schema_version \
+      -X github.com/opencord/voltha-lib-go/v7/pkg/version.vcsRef=$org_label_schema_vcs_ref \
+      -X github.com/opencord/voltha-lib-go/v7/pkg/version.vcsDirty=$org_opencord_vcs_dirty \
+      -X github.com/opencord/voltha-lib-go/v7/pkg/version.goVersion=$(go version 2>&1 | sed -E  's/.*go([0-9]+\.[0-9]+\.[0-9]+).*/\1/g') \
+      -X github.com/opencord/voltha-lib-go/v7/pkg/version.os=$(go env GOHOSTOS) \
+      -X github.com/opencord/voltha-lib-go/v7/pkg/version.arch=$(go env GOHOSTARCH) \
+      -X github.com/opencord/voltha-lib-go/v7/pkg/version.buildTime=$org_label_schema_build_date" \
+      ./cmd/bbf-adapter/
+
+# -------------
+# Image creation stage
+FROM alpine:3.13 AS prod
+
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+
+RUN apk add --no-cache pcre2=10.36-r0 libssh=0.9.5-r0 openssl=1.1.1n-r0
+
+# Dependencies install their library files in lib64, add it to the path
+RUN echo "/lib:/usr/local/lib:/usr/lib:/usr/local/lib64" > /etc/ld-musl-x86_64.path
+
+# Copy dependencies files
+COPY --from=dev /usr/local/bin /usr/local/bin
+COPY --from=dev /usr/local/lib64 /usr/local/lib64
+COPY --from=dev /usr/local/share /usr/local/share
+COPY --from=dev /etc/sysrepo /etc/sysrepo
 
 # Copy yang files and install them to sysrepo
 COPY ./build/yang-files /yang
