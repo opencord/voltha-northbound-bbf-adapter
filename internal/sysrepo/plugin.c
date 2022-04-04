@@ -23,12 +23,26 @@ typedef void (*function)(); // https://golang.org/issue/19835
 
 //CGO can't see raw structs
 typedef struct lyd_node lyd_node;
+typedef struct ly_ctx ly_ctx;
 
-//Exported by sysrepo.go
+//Provides data for the schema-mount extension
+LY_ERR mountpoint_ext_data_clb(
+    const struct lysc_ext_instance *ext,
+    void *user_data,
+    void **ext_data,
+    ly_bool *ext_data_free)
+{
+    *ext_data = (lyd_node*) user_data;
+    *ext_data_free = 0;
+    return LY_SUCCESS;
+}
+
+// Exported by sysrepo.go
 sr_error_t get_devices_cb(sr_session_ctx_t *session, lyd_node **parent);
 
-//The wrapper function is needed because CGO cannot express const char*
-//and thus it can't match sysrepo's callback signature
+//The wrapper functions are needed because CGO cannot express some keywords
+//such as "const", and thus it can't match sysrepo's callback signature
+
 int get_devices_cb_wrapper(
     sr_session_ctx_t *session,
     uint32_t subscription_id,

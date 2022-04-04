@@ -97,6 +97,14 @@ COPY --from=dev /etc/sysrepo /etc/sysrepo
 COPY ./build/yang-files /yang
 RUN for f in /yang/*.yang; do sysrepoctl -i "$f" -s /yang -p 664 -v3; done
 
+# Enable admin and oper state in ietf-hardware
+RUN sysrepoctl -e hardware-state -c ietf-hardware
+
+COPY ./build/yang-files/schema-mount.xml /
+
+# Add sysrepo's yang library data to the data provided to the schema-mount libyang extension
+RUN sysrepocfg -X -x/ietf-yang-library:* -d operational >> /schema-mount.xml
+
 # Add user for connecting to netopeer2-server through ssh
 ARG NETCONF_USER=voltha
 ARG NETCONF_PASSWORD=onf
@@ -106,7 +114,7 @@ RUN adduser $NETCONF_USER --uid 1001 -G netconf --disabled-password
 RUN echo $NETCONF_USER:$NETCONF_PASSWORD | chpasswd
 
 # Set the working directory
-WORKDIR /app
+WORKDIR /
 
 # Copy required files
 COPY --from=dev /app/bbf-adapter /app/bbf-adapter

@@ -22,6 +22,8 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"unsafe"
 
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
@@ -29,13 +31,21 @@ import (
 )
 
 type SysrepoPlugin struct {
-	connection   *C.sr_conn_ctx_t
-	session      *C.sr_session_ctx_t
-	subscription *C.sr_subscription_ctx_t
+	connection      *C.sr_conn_ctx_t
+	session         *C.sr_session_ctx_t
+	subscription    *C.sr_subscription_ctx_t
+	schemaMountData *C.lyd_node
 }
 
-func errorMsg(code C.int) string {
+func srErrorMsg(code C.int) string {
 	return C.GoString(C.sr_strerror(code))
+}
+
+func lyErrorMsg(ly_ctx *C.ly_ctx) string {
+	lyErrString := C.ly_errmsg(ly_ctx)
+	defer freeCString(lyErrString)
+
+	return C.GoString(lyErrString)
 }
 
 func freeCString(str *C.char) {
@@ -53,11 +63,16 @@ func updateYangItems(ctx context.Context, session *C.sr_session_ctx_t, parent **
 
 	//libyang context
 	ly_ctx := C.sr_acquire_context(conn)
+	defer C.sr_release_context(conn)
 	if ly_ctx == nil {
 		return fmt.Errorf("null-libyang-context")
 	}
 
 	for _, item := range items {
+		if item.Value == "" {
+			continue
+		}
+
 		logger.Debugw(ctx, "updating-yang-item", log.Fields{"item": item})
 
 		path := C.CString(item.Path)
@@ -68,9 +83,7 @@ func updateYangItems(ctx context.Context, session *C.sr_session_ctx_t, parent **
 			freeCString(path)
 			freeCString(value)
 
-			lyErrString := C.ly_errmsg(ly_ctx)
-			err := fmt.Errorf("libyang-new-path-failed: %d %s", lyErr, C.GoString(lyErrString))
-			freeCString(lyErrString)
+			err := fmt.Errorf("libyang-new-path-failed: %d %s", lyErr, lyErrorMsg(ly_ctx))
 
 			return err
 		}
@@ -91,7 +104,7 @@ func (p *SysrepoPlugin) createSession(ctx context.Context) error {
 	errCode = C.sr_connect(C.SR_CONN_DEFAULT, &p.connection)
 	if errCode != C.SR_ERR_OK {
 		err := fmt.Errorf("sysrepo-connect-error")
-		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": errorMsg(errCode)})
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 		return err
 	}
 
@@ -99,7 +112,7 @@ func (p *SysrepoPlugin) createSession(ctx context.Context) error {
 	errCode = C.sr_session_start(p.connection, C.SR_DS_RUNNING, &p.session)
 	if errCode != C.SR_ERR_OK {
 		err := fmt.Errorf("sysrepo-session-error")
-		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": errorMsg(errCode)})
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 
 		_ = p.Stop(ctx)
 
@@ -147,7 +160,7 @@ func get_devices_cb(session *C.sr_session_ctx_t, parent **C.lyd_node) C.sr_error
 	return C.SR_ERR_OK
 }
 
-func StartNewPlugin(ctx context.Context) (*SysrepoPlugin, error) {
+func StartNewPlugin(ctx context.Context, schemaMountFilePath string) (*SysrepoPlugin, error) {
 	plugin := &SysrepoPlugin{}
 
 	//Open a session to sysrepo
@@ -156,8 +169,34 @@ func StartNewPlugin(ctx context.Context) (*SysrepoPlugin, error) {
 		return nil, err
 	}
 
-	//TODO: could be useful to set it according to the adapter log level
-	C.sr_log_stderr(C.SR_LL_WRN)
+	//Read the schema-mount file
+	if _, err := os.Stat(schemaMountFilePath); err != nil {
+		//The file cannot be found
+		return nil, fmt.Errorf("plugin-startup-schema-mount-file-not-found: %v", err)
+	}
+
+	smBuffer, err := ioutil.ReadFile(schemaMountFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("plugin-startup-cannot-read-schema-mount-file: %v", err)
+	}
+
+	smString := C.CString(string(smBuffer))
+	defer freeCString(smString)
+
+	ly_ctx := C.sr_acquire_context(plugin.connection)
+	defer C.sr_release_context(plugin.connection)
+	if ly_ctx == nil {
+		return nil, fmt.Errorf("plugin-startup-null-libyang-context")
+	}
+
+	//Parse the schema-mount file into libyang nodes, and save them into the plugin data
+	lyErrCode := C.lyd_parse_data_mem(ly_ctx, smString, C.LYD_XML, C.LYD_PARSE_STRICT, C.LYD_VALIDATE_PRESENT, &plugin.schemaMountData)
+	if lyErrCode != C.LY_SUCCESS {
+		return nil, fmt.Errorf("plugin-startup-cannot-parse-schema-mount: %v", lyErrorMsg(ly_ctx))
+	}
+
+	//Bind the callback needed to support schema-mount
+	C.sr_set_ext_data_cb(plugin.connection, C.function(C.mountpoint_ext_data_clb), unsafe.Pointer(plugin.schemaMountData))
 
 	//Set callbacks for events
 
@@ -179,7 +218,7 @@ func StartNewPlugin(ctx context.Context) (*SysrepoPlugin, error) {
 	)
 	if errCode != C.SR_ERR_OK {
 		err := fmt.Errorf("sysrepo-failed-subscription-to-get-events")
-		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": errorMsg(errCode)})
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 		return nil, err
 	}
 
@@ -191,12 +230,15 @@ func StartNewPlugin(ctx context.Context) (*SysrepoPlugin, error) {
 func (p *SysrepoPlugin) Stop(ctx context.Context) error {
 	var errCode C.int
 
+	//Free the libyang nodes for external schema-mount data
+	C.lyd_free_all(p.schemaMountData)
+
 	//Frees subscription
 	if p.subscription != nil {
 		errCode = C.sr_unsubscribe(p.subscription)
 		if errCode != C.SR_ERR_OK {
 			err := fmt.Errorf("failed-to-close-sysrepo-subscription")
-			logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": errorMsg(errCode)})
+			logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 			return err
 		}
 		p.subscription = nil
@@ -207,7 +249,7 @@ func (p *SysrepoPlugin) Stop(ctx context.Context) error {
 		errCode = C.sr_session_stop(p.session)
 		if errCode != C.SR_ERR_OK {
 			err := fmt.Errorf("failed-to-close-sysrepo-session")
-			logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": errorMsg(errCode)})
+			logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 			return err
 		}
 		p.session = nil
@@ -218,7 +260,7 @@ func (p *SysrepoPlugin) Stop(ctx context.Context) error {
 		errCode = C.sr_disconnect(p.connection)
 		if errCode != C.SR_ERR_OK {
 			err := fmt.Errorf("failed-to-close-sysrepo-connection")
-			logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": errorMsg(errCode)})
+			logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 			return err
 		}
 		p.connection = nil

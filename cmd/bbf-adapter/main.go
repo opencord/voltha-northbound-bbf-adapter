@@ -75,7 +75,7 @@ func (a *bbfAdapter) start(ctx context.Context) {
 	core.AdapterInstance = core.NewVolthaYangAdapter(a.volthaNbiClient, a.oltAppClient)
 
 	//Load sysrepo plugin
-	a.sysrepoPlugin, err = sysrepo.StartNewPlugin(ctx)
+	a.sysrepoPlugin, err = sysrepo.StartNewPlugin(ctx, a.conf.SchemaMountFilePath)
 	if err != nil {
 		logger.Fatalw(ctx, "failed-to-start-sysrepo-plugin", log.Fields{"err": err})
 	} else {
