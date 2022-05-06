@@ -31,7 +31,7 @@ FROM --platform=linux/amd64 golang:1.16.3-alpine3.13 AS dev
 
 RUN mkdir -m 777 /.cache /go/pkg
 
-RUN apk add --no-cache build-base=0.5-r2 pcre2-dev=10.36-r0 git=2.30.2-r0 cmake=3.18.4-r1
+RUN apk add --no-cache build-base=0.5-r2 pcre2-dev=10.36-r0 git=2.30.3-r0 cmake=3.18.4-r1
 
 # Dependencies install their library files in lib64, add it to the path
 RUN echo "/lib:/usr/local/lib:/usr/lib:/usr/local/lib64" > /etc/ld-musl-x86_64.path

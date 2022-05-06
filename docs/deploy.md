@@ -49,6 +49,14 @@ Running the following instruction will connect to the adapter's netopeer2 instan
 connect --ssh --host localhost --port 50830 --login voltha
 ```
 
+Note: The `host` networking does not work with Docker-for-Desktop software used on Mac. The `localhost` is treated
+as localhost within the docker. So replace localhost with `host.docker.internal` that gives the Mac host IP.
+Use below command on MacOS
+
+```
+connect --ssh --host  host.docker.internal --port 50830 --login voltha
+```
+
 When presented with the server's fingerprint, confirm by entering `yes`, and then log in with password `onf`.
 
 After a successful login, a request can be performed:
