@@ -1,5 +1,14 @@
+# github.com/Shopify/sarama v1.29.1
+## explicit
+github.com/Shopify/sarama
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/eapache/go-resiliency v1.2.0
+github.com/eapache/go-resiliency/breaker
+# github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21
+github.com/eapache/go-xerial-snappy
+# github.com/eapache/queue v1.1.0
+github.com/eapache/queue
 # github.com/golang/protobuf v1.5.2
 ## explicit
 github.com/golang/protobuf/jsonpb
@@ -12,11 +21,56 @@ github.com/golang/protobuf/ptypes/empty
 github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
+# github.com/golang/snappy v0.0.3
+github.com/golang/snappy
 # github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 github.com/grpc-ecosystem/go-grpc-middleware
 github.com/grpc-ecosystem/go-grpc-middleware/tags
 github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing
 github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
+# github.com/hashicorp/go-uuid v1.0.2
+github.com/hashicorp/go-uuid
+# github.com/jcmturner/aescts/v2 v2.0.0
+github.com/jcmturner/aescts/v2
+# github.com/jcmturner/dnsutils/v2 v2.0.0
+github.com/jcmturner/dnsutils/v2
+# github.com/jcmturner/gofork v1.0.0
+github.com/jcmturner/gofork/encoding/asn1
+github.com/jcmturner/gofork/x/crypto/pbkdf2
+# github.com/jcmturner/gokrb5/v8 v8.4.2
+github.com/jcmturner/gokrb5/v8/asn1tools
+github.com/jcmturner/gokrb5/v8/client
+github.com/jcmturner/gokrb5/v8/config
+github.com/jcmturner/gokrb5/v8/credentials
+github.com/jcmturner/gokrb5/v8/crypto
+github.com/jcmturner/gokrb5/v8/crypto/common
+github.com/jcmturner/gokrb5/v8/crypto/etype
+github.com/jcmturner/gokrb5/v8/crypto/rfc3961
+github.com/jcmturner/gokrb5/v8/crypto/rfc3962
+github.com/jcmturner/gokrb5/v8/crypto/rfc4757
+github.com/jcmturner/gokrb5/v8/crypto/rfc8009
+github.com/jcmturner/gokrb5/v8/gssapi
+github.com/jcmturner/gokrb5/v8/iana
+github.com/jcmturner/gokrb5/v8/iana/addrtype
+github.com/jcmturner/gokrb5/v8/iana/adtype
+github.com/jcmturner/gokrb5/v8/iana/asnAppTag
+github.com/jcmturner/gokrb5/v8/iana/chksumtype
+github.com/jcmturner/gokrb5/v8/iana/errorcode
+github.com/jcmturner/gokrb5/v8/iana/etypeID
+github.com/jcmturner/gokrb5/v8/iana/flags
+github.com/jcmturner/gokrb5/v8/iana/keyusage
+github.com/jcmturner/gokrb5/v8/iana/msgtype
+github.com/jcmturner/gokrb5/v8/iana/nametype
+github.com/jcmturner/gokrb5/v8/iana/patype
+github.com/jcmturner/gokrb5/v8/kadmin
+github.com/jcmturner/gokrb5/v8/keytab
+github.com/jcmturner/gokrb5/v8/krberror
+github.com/jcmturner/gokrb5/v8/messages
+github.com/jcmturner/gokrb5/v8/pac
+github.com/jcmturner/gokrb5/v8/types
+# github.com/jcmturner/rpc/v2 v2.0.3
+github.com/jcmturner/rpc/v2/mstypes
+github.com/jcmturner/rpc/v2/ndr
 # github.com/jhump/protoreflect v1.10.2
 github.com/jhump/protoreflect/codec
 github.com/jhump/protoreflect/desc
@@ -26,7 +80,12 @@ github.com/jhump/protoreflect/dynamic/grpcdynamic
 github.com/jhump/protoreflect/grpcreflect
 github.com/jhump/protoreflect/internal
 github.com/jhump/protoreflect/internal/codec
-# github.com/opencord/voltha-lib-go/v7 v7.1.5
+# github.com/klauspost/compress v1.12.2
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
+# github.com/opencord/voltha-lib-go/v7 v7.2.0
 ## explicit
 github.com/opencord/voltha-lib-go/v7/pkg/grpc
 github.com/opencord/voltha-lib-go/v7/pkg/log
@@ -53,11 +112,16 @@ github.com/opencord/voltha-protos/v5/go/voltha
 github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/ext
 github.com/opentracing/opentracing-go/log
+# github.com/pierrec/lz4 v2.6.0+incompatible
+github.com/pierrec/lz4
+github.com/pierrec/lz4/internal/xxh32
 # github.com/pkg/errors v0.9.1
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
-# github.com/stretchr/testify v1.7.0
+# github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
+github.com/rcrowley/go-metrics
+# github.com/stretchr/testify v1.7.1
 ## explicit
 github.com/stretchr/testify/assert
 # github.com/uber/jaeger-client-go v2.29.1+incompatible
@@ -92,13 +156,18 @@ go.uber.org/zap/internal/bufferpool
 go.uber.org/zap/internal/color
 go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
+# golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e
+golang.org/x/crypto/md4
+golang.org/x/crypto/pbkdf2
 # golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 golang.org/x/net/context
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
+golang.org/x/net/internal/socks
 golang.org/x/net/internal/timeseries
+golang.org/x/net/proxy
 golang.org/x/net/trace
 # golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
 golang.org/x/sys/internal/unsafeheader
@@ -151,6 +220,7 @@ google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
 # google.golang.org/protobuf v1.27.1
+## explicit
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire

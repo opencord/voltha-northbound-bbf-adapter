@@ -21,5 +21,10 @@ linters:
     #- gochecknoinits
     #- gocritic
     - gofmt
+    - errcheck
     #- golint
     #- unparam
+
+issues:
+  exclude:
+    - "Package github.com/golang/protobuf/proto is deprecated"

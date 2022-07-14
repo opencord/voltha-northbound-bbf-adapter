@@ -44,6 +44,7 @@ type bbfAdapter struct {
 	volthaNbiClient *clients.VolthaNbiClient
 	oltAppClient    *clients.OltAppClient
 	sysrepoPlugin   *sysrepo.SysrepoPlugin
+	kafkaConsumer   *clients.KafkaConsumer
 }
 
 func newBbfAdapter(conf *config.BBFAdapterConfig) *bbfAdapter {
@@ -82,6 +83,14 @@ func (a *bbfAdapter) start(ctx context.Context) {
 		probe.UpdateStatusFromContext(ctx, sysrepoService, probe.ServiceStatusRunning)
 	}
 
+	//Set up the Kafka consumer
+	a.kafkaConsumer = clients.NewKafkaConsumer(a.conf.KafkaClusterAddress)
+	if err := a.kafkaConsumer.Start(ctx, a.sysrepoPlugin.ManageVolthaEvent); err != nil {
+		logger.Fatalw(ctx, "failed-to-start-kafka-consumer", log.Fields{"err": err})
+	} else {
+		probe.UpdateStatusFromContext(ctx, a.conf.KafkaClusterAddress, probe.ServiceStatusRunning)
+	}
+
 	//Set the service as running, making the adapter finally ready
 	probe.UpdateStatusFromContext(ctx, bbfAdapterService, probe.ServiceStatusRunning)
 	logger.Info(ctx, "bbf-adapter-ready")
@@ -90,6 +99,10 @@ func (a *bbfAdapter) start(ctx context.Context) {
 //Close all connections of the adapter
 func (a *bbfAdapter) cleanup(ctx context.Context) {
 	core.AdapterInstance = nil
+
+	if err := a.kafkaConsumer.Stop(); err != nil {
+		logger.Errorw(ctx, "failed-to-stop-kafka-consumer", log.Fields{"err": err})
+	}
 
 	a.volthaNbiClient.Close(ctx)
 
@@ -201,6 +214,7 @@ func main() {
 		bbfAdapterService,
 		conf.VolthaNbiEndpoint,
 		conf.OnosRestEndpoint,
+		conf.KafkaClusterAddress,
 		sysrepoService,
 	)
 

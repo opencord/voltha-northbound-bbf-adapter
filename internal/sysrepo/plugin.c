@@ -25,6 +25,9 @@ typedef void (*function)(); // https://golang.org/issue/19835
 typedef struct lyd_node lyd_node;
 typedef struct ly_ctx ly_ctx;
 
+//Used to define the datastore edit mode
+const char* mergeOperation = "merge";
+
 //Provides data for the schema-mount extension
 LY_ERR mountpoint_ext_data_clb(
     const struct lysc_ext_instance *ext,
@@ -37,7 +40,7 @@ LY_ERR mountpoint_ext_data_clb(
     return LY_SUCCESS;
 }
 
-// Exported by sysrepo.go
+// Exported by callbacks.go
 sr_error_t get_devices_cb(sr_session_ctx_t *session, lyd_node **parent);
 
 //The wrapper functions are needed because CGO cannot express some keywords

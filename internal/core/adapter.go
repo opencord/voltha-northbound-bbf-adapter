@@ -23,6 +23,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
 	"github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
+	"github.com/opencord/voltha-protos/v5/go/voltha"
 )
 
 var AdapterInstance *VolthaYangAdapter
@@ -42,13 +43,35 @@ func NewVolthaYangAdapter(nbiClient *clients.VolthaNbiClient, oltClient *clients
 func (t *VolthaYangAdapter) GetDevices(ctx context.Context) ([]YangItem, error) {
 	devices, err := t.volthaNbiClient.Service.ListDevices(ctx, &empty.Empty{})
 	if err != nil {
-		err = fmt.Errorf("get-devices-failed: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("get-devices-failed: %v", err)
 	}
+	logger.Debugw(ctx, "get-devices-success", log.Fields{"devices": devices})
 
-	items := translateDevices(*devices)
+	items := []YangItem{}
 
-	logger.Debugw(ctx, "get-devices-success", log.Fields{"items": items})
+	for _, device := range devices.Items {
+		items = append(items, translateDevice(device)...)
+
+		if !device.Root {
+			//If the device is an ONU, also expose UNIs
+			ports, err := t.volthaNbiClient.Service.ListDevicePorts(ctx, &voltha.ID{Id: device.Id})
+			if err != nil {
+				return nil, fmt.Errorf("get-onu-ports-failed: %v", err)
+			}
+			logger.Debugw(ctx, "get-ports-success", log.Fields{"deviceId": device.Id, "ports": ports})
+
+			portsItems, err := translateOnuPorts(device.Id, ports)
+			if err != nil {
+				logger.Errorw(ctx, "cannot-translate-onu-ports", log.Fields{
+					"deviceId": device.Id,
+					"err":      err,
+				})
+				continue
+			}
+
+			items = append(items, portsItems...)
+		}
+	}
 
 	return items, nil
 }

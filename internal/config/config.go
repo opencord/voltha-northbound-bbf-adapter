@@ -36,6 +36,7 @@ type BBFAdapterConfig struct {
 	OnosUser              string
 	OnosPassword          string
 	SchemaMountFilePath   string
+	KafkaClusterAddress   string
 }
 
 // LoadConfig loads the BBF adapter configuration through
@@ -57,6 +58,7 @@ func LoadConfig(ctx context.Context) *BBFAdapterConfig {
 	flag.StringVar(&conf.OnosUser, "onos_user", conf.OnosUser, "Username for ONOS REST APIs")
 	flag.StringVar(&conf.OnosPassword, "onos_pass", conf.OnosPassword, "Password for ONOS REST APIs")
 	flag.StringVar(&conf.SchemaMountFilePath, "schema_mount_path", conf.SchemaMountFilePath, "Path to the XML file that defines schema-mounts for libyang")
+	flag.StringVar(&conf.KafkaClusterAddress, "kafka_cluster_address", conf.KafkaClusterAddress, "Kafka cluster messaging address")
 
 	flag.Parse()
 
@@ -80,5 +82,6 @@ func getDefaultConfig() *BBFAdapterConfig {
 		OnosUser:              "onos",
 		OnosPassword:          "rocks",
 		SchemaMountFilePath:   "/schema-mount.xml",
+		KafkaClusterAddress:   "127.0.0.1:9092",
 	}
 }

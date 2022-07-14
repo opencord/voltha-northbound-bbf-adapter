@@ -1,4 +1,5 @@
 build/*
 !build/yang-files*
+!build/config*
 tests/*
 docs/*

@@ -20,7 +20,7 @@
 FROM voltha/bbf-adapter-builder:local AS dev
 
 #Build runtime dependencies
-RUN apk add --no-cache libssh-dev=0.9.5-r0 openssl-dev=1.1.1n-r0 openssl=1.1.1n-r0 bash=5.1.16-r0
+RUN apk add --no-cache libssh-dev=0.9.5-r0 openssl-dev=1.1.1q-r0 openssl=1.1.1q-r0 bash=5.1.16-r0
 
 ARG LIBNETCONF2_VERSION
 ARG NETOPEER2_VERSION
@@ -82,28 +82,17 @@ FROM alpine:3.13 AS prod
 
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
-RUN apk add --no-cache pcre2=10.36-r0 libssh=0.9.5-r0 openssl=1.1.1n-r0
+RUN apk add --no-cache pcre2=10.36-r1 libssh=0.9.5-r0 openssl=1.1.1q-r0
 
 # Dependencies install their library files in lib64, add it to the path
 RUN echo "/lib:/usr/local/lib:/usr/lib:/usr/local/lib64" > /etc/ld-musl-x86_64.path
 
 # Copy dependencies files
 COPY --from=dev /usr/local/bin /usr/local/bin
+COPY --from=dev /usr/local/sbin /usr/local/sbin
 COPY --from=dev /usr/local/lib64 /usr/local/lib64
 COPY --from=dev /usr/local/share /usr/local/share
 COPY --from=dev /etc/sysrepo /etc/sysrepo
-
-# Copy yang files and install them to sysrepo
-COPY ./build/yang-files /yang
-RUN for f in /yang/*.yang; do sysrepoctl -i "$f" -s /yang -p 664 -v3; done
-
-# Enable admin and oper state in ietf-hardware
-RUN sysrepoctl -e hardware-state -c ietf-hardware
-
-COPY ./build/yang-files/schema-mount.xml /
-
-# Add sysrepo's yang library data to the data provided to the schema-mount libyang extension
-RUN sysrepocfg -X -x/ietf-yang-library:* -d operational >> /schema-mount.xml
 
 # Add user for connecting to netopeer2-server through ssh
 ARG NETCONF_USER=voltha
@@ -112,6 +101,25 @@ ARG NETCONF_PASSWORD=onf
 RUN addgroup -S netconf
 RUN adduser $NETCONF_USER --uid 1001 -G netconf --disabled-password
 RUN echo $NETCONF_USER:$NETCONF_PASSWORD | chpasswd
+
+# Copy yang files and install them to sysrepo
+COPY ./build/yang-files /yang
+RUN for f in /yang/*.yang; do sysrepoctl -i "$f" -s /yang -o $NETCONF_USER -g netconf -p 664 -v3; done
+RUN for f in /yang/*/*.yang; do sysrepoctl -i "$f" -s /yang -o $NETCONF_USER -g netconf -p 664 -v3; done
+
+COPY ./build/config /config
+# Disable nacm to test edit-config easily
+RUN sysrepocfg --import=/config/nacm.xml -d startup -m ietf-netconf-acm
+RUN sysrepocfg --import=/config/nacm.xml -d running -m ietf-netconf-acm
+RUN sysrepocfg --import=/config/nacm.xml -d candidate -m ietf-netconf-acm
+
+# Enable admin and oper state in ietf-hardware
+RUN sysrepoctl -e hardware-state -c ietf-hardware -v3
+
+COPY ./build/yang-files/schema-mount.xml /
+
+# Add sysrepo's yang library data to the data provided to the schema-mount libyang extension
+RUN sysrepocfg -X -x/ietf-yang-library:* -d operational >> /schema-mount.xml
 
 # Set the working directory
 WORKDIR /

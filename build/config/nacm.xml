@@ -1,0 +1,26 @@
+<!-- ietf-netconf-acm.xml -->
+<nacm xmlns="urn:ietf:params:xml:ns:yang:ietf-netconf-acm">
+  <enable-nacm>true</enable-nacm>
+  <groups>
+    <group>
+      <name>voltha</name>
+      <user-name>voltha</user-name>
+    </group>
+  </groups>
+  <rule-list>
+    <name>devices</name>
+    <group>voltha</group>
+    <rule>
+      <name>allow-devices</name>
+      <module-name>bbf-device-aggregation</module-name>
+      <access-operations>*</access-operations>
+      <action>permit</action>
+    </rule>
+    <rule>
+      <name>allow-hardware</name>
+      <module-name>ietf-hardware</module-name>
+      <access-operations>*</access-operations>
+      <action>permit</action>
+    </rule>
+  </rule-list>
+</nacm>

@@ -21,7 +21,7 @@ The callback that will pass this data to libyang is defined in `internal/sysrepo
 - If additional yang modules are needed, add them to `build/yang-files` to be installed to sysrepo during the creation of the adapter's Docker image
 - If additional sysrepo configuration is needed for the moudule (i.e. enabling a feature) it can be added to `build/package/Dockerfile.bbf-adapter`
 - A new callback function has to be created. CGO cannot directly express the `const` keyword used in the signature of the C callbacks of libsysrepo.\
-For this reason, a Go function can be created and exposed in `internal/sysrepo/sysrepo.go`, while its corresponding wrapper with the right signature has to be created in `internal/sysrepo/plugin.go`.
+For this reason, a Go function can be created and exposed in `internal/sysrepo/callbacks.go`, while its corresponding wrapper with the right signature has to be created in `internal/sysrepo/plugin.go`.
 - The new callback wrapper has to be registered in the StartNewPlugin function of `internal/sysrepo/sysrepo.go`, using the sysrepo API to subscribe to the desired type of operation and XPath.
 - The Golang callback will interact with VOLTHA through the instance of VolthaYangAdapter exposed by the `core.AdapterInstance` variable.\
 If the operation needed by the new callback is not implemented already, it can be created as a new method in `internal/core/adapter.go`, eventually expanding the capabilities of the clients in `internal/clients/nbi.go` and `internal/clients/olt_app.go`, or creating new translation functions in `internal/core/translation.go`.

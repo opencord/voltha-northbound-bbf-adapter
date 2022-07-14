@@ -22,7 +22,7 @@ helm upgrade --install --create-namespace -n voltha bbf \
             --set images.voltha_northbound_bbf_adapter.tag=master
 ```
 
-The SSH port on which netopeer2 is listening can be exposed on localhost by running:
+If needed, the SSH port on which netopeer2 is listening can be exposed on localhost by running:
 
 ```
 kubectl -n voltha port-forward svc/bbf-voltha-northbound-bbf-adapter-netopeer2 50830
@@ -35,35 +35,37 @@ kubectl -n voltha logs --follow $(kubectl -n voltha get pods -l app=bbf-adapter 
 ```
 
 ## Make NETCONF requests
-
-After a succesful installation, a NETCONF client can be used to perform requests to the adapter's netopeer2 instance.
-For this example, we will use netopeer2-cli.
+After a succesful installation, a NETCONF client can be used to perform requests to the adapter's netopeer2 instance.\
+For these examples, we will use an instance of netopeer2-cli  running inside the BBF Adapter's container.
 
 ```
-docker run --rm --net=host -it erap320/netopeer2-cli
+kubectl -n voltha exec -it $(kubectl -n voltha get pods -l app=bbf-adapter -o name) -- netopeer2-cli
 ```
 
 Running the following instruction will connect to the adapter's netopeer2 instance as the default `voltha` user.
 
 ```
-connect --ssh --host localhost --port 50830 --login voltha
-```
-
-Note: The `host` networking does not work with Docker-for-Desktop software used on Mac. The `localhost` is treated
-as localhost within the docker. So replace localhost with `host.docker.internal` that gives the Mac host IP.
-Use below command on MacOS
-
-```
-connect --ssh --host  host.docker.internal --port 50830 --login voltha
+connect --login voltha
 ```
 
 When presented with the server's fingerprint, confirm by entering `yes`, and then log in with password `onf`.
 
-After a successful login, a request can be performed:
+After a successful login, requests can be performed.
+
+### Getting device data
 
 ```
 get-data --datastore operational --filter-xpath /bbf-device-aggregation:*
 ```
+
+### ONU activation notifications
+
+Run the following commands inside the netopeer2-cli console.
+```
+ext-data /schema-mount.xml
+subscribe --stream bbf-xpon-onu-states
+```
+A notification will be shown when a new ONU is activated.
 
 ## Stop the BBF adapter
 ```

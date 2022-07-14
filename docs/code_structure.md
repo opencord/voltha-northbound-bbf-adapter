@@ -42,5 +42,7 @@ Since sysrepo doesn't provide official bindings for golang, this project uses CG
 
 - `plugin.c` is a C file used to include dependencies (like libyang and sysrepo header files) and define some utilities that make it possible to perform all the necessary operations through CGO.
 - `sysrepo.go` imports `plugin.c` and defines the SysrepoPlugin struct, which keeps track of the adapter's connection with sysrepo. At startup, a connection is created and the necessary callback functions are registered.
+- `callbacks.go` contains the definitions of callback functions called by sysrepo for the subscribed operations
+- `utils.go` contains functions to ease the interaction with Sysrepo and CGO
 
 When a NETCONF operation is executed on one of the modules managed by the BBF adapter, the corresponding go function will be called. The latter will interact with the global instance of VolthaYangAdapter to fulfill the request and provide a result, eventually updating the content of the datastore.
