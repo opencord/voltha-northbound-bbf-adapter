@@ -23,4 +23,20 @@
       <action>permit</action>
     </rule>
   </rule-list>
+  <rule-list>
+    <name>services</name>
+    <group>voltha</group>
+    <rule>
+      <name>allow-vlans</name>
+      <module-name>bbf-l2-access-attributes</module-name>
+      <access-operations>*</access-operations>
+      <action>permit</action>
+    </rule>
+    <rule>
+      <name>allow-services</name>
+      <module-name>bbf-nt-service-profile</module-name>
+      <access-operations>*</access-operations>
+      <action>permit</action>
+    </rule>
+  </rule-list>
 </nacm>

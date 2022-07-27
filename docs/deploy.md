@@ -42,9 +42,11 @@ For these examples, we will use an instance of netopeer2-cli  running inside the
 kubectl -n voltha exec -it $(kubectl -n voltha get pods -l app=bbf-adapter -o name) -- netopeer2-cli
 ```
 
-Running the following instruction will connect to the adapter's netopeer2 instance as the default `voltha` user.
+Running the following instructions will connect to the adapter's netopeer2 instance as the default `voltha` user.
 
 ```
+searchpath /etc/sysrepo/yang
+ext-data /schema-mount.xml
 connect --login voltha
 ```
 
@@ -54,6 +56,7 @@ After a successful login, requests can be performed.
 
 ### Getting device data
 
+Run the following commands inside the netopeer2-cli console.
 ```
 get-data --datastore operational --filter-xpath /bbf-device-aggregation:*
 ```
@@ -62,10 +65,28 @@ get-data --datastore operational --filter-xpath /bbf-device-aggregation:*
 
 Run the following commands inside the netopeer2-cli console.
 ```
-ext-data /schema-mount.xml
 subscribe --stream bbf-xpon-onu-states
 ```
 A notification will be shown when a new ONU is activated.
+
+### Provision and remove a service
+
+Run the following command in a separate terminal, from the root of this repository, to copy the example XMLs into the adapter's container.
+```
+kubectl cp examples/ voltha/$(kubectl -n voltha get pods -l app=bbf-adapter -o name | awk -F "/" '{print $2}'):/
+```
+To provision the service with one of the example XMLs, run the following command inside the netopeer2-cli console.
+```
+edit-config --target running --config=/examples/provision_service.xml
+```
+The details of the provisioned services can be retrived with the following command.
+```
+get-data --datastore operational --filter-xpath /bbf-nt-service-profile:*|/bbf-l2-access-attributes:*|/bbf-nt-line-profile:*
+```
+Finally, the service can be removed.
+```
+edit-config --target running --config=/examples/remove_service.xml
+```
 
 ## Stop the BBF adapter
 ```

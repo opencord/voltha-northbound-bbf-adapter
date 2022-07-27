@@ -1,0 +1,197 @@
+module bbf-nt-line-profile {
+  yang-version 1.1;
+  namespace "urn:bbf:yang:bbf-nt-line-profile";
+  prefix bbf-nt-line-prof;
+
+  organization
+    "Broadband Forum <https://www.broadband-forum.org>
+     Common YANG Work Area";
+  contact
+    "Comments or questions about this Broadband Forum YANG module
+     should be directed to <mailto:help@broadband-forum.org>.
+
+     Editor:      TBD
+
+     PS Leader:   TBD
+
+     WA Director: TBD";
+  description
+    "This module contains a collection of YANG definitions for
+     simplifying the Access Device Model as exposed over NBI of BAA.
+
+     Copyright (c) 2022, Broadband Forum
+
+     Redistribution and use in source and binary forms, with or
+     without modification, are permitted provided that the following
+     conditions are met:
+
+     1. Redistributions of source code must retain the above copyright
+        notice, this list of conditions and the following disclaimer.
+
+     2. Redistributions in binary form must reproduce the above
+        copyright notice, this list of conditions and the following
+        disclaimer in the documentation and/or other materials
+        provided with the distribution.
+
+     3. Neither the name of the copyright holder nor the names of its
+        contributors may be used to endorse or promote products
+        derived from this software without specific prior written
+        permission.
+
+     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+     CONTRIBUTORS \"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+     INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+     MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+     DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+     CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+     SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+     NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+     LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+     STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+     ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+     The above license is used as a license under copyright only.
+     Please reference the Forum IPR Policy for patent licensing terms
+     <https://www.broadband-forum.org/ipr-policy>.
+
+     Any moral rights which are necessary to exercise under the above
+     license grant are also deemed granted under this license.
+
+     This version of this YANG module is part of TR-383a4; see
+     the TR itself for full legal notices.";
+
+  revision 2021-09-14 {
+    description
+      "Initial revision.";
+    reference
+      "";
+  }
+
+  typedef line-profile-ref {
+    type leafref {
+      path
+        "/bbf-nt-line-prof:line-profiles/bbf-nt-line-prof:line-profile/bbf-nt-line-prof:name";
+    }
+    description
+      "A reference to a network termination line profile.";
+  }
+
+  typedef line-bandwidth-ref {
+    type leafref {
+      path
+        "/bbf-nt-line-prof:line-bandwidth-profiles/bbf-nt-line-prof:line-bandwidth-profile/bbf-nt-line-prof:name";
+    }
+    description
+      "A reference to a network termination bandwidth profile.";
+  }
+
+  container line-bandwidth-profiles {
+    list line-bandwidth-profile {
+      key "name";
+      description
+        "List of line profiles.";
+      leaf name {
+        type string {
+          length "1..32";
+        }
+        description
+          "The line bandwidth profile name.";
+      }
+      leaf fixed-bandwidth {
+        type uint64;
+        units "bits/second";
+        default "0";
+        description
+          "Represents the reserved portion of the bandwidth capacity that
+           is allocated to the given traffic flow, regardless of its
+           traffic demand and the overall traffic load conditions.";
+      }
+      leaf assured-bandwidth {
+        type uint64;
+        units "bits/second";
+        default "0";
+        description
+          "Represents a portion of the bandwidth capacity that is allocated
+           to the given traffic flow as long as the flow has
+           unsatisfied traffic demand, regardless of the overall
+           traffic conditions.";
+      }
+      leaf maximum-bandwidth {
+        type uint64;
+        units "bits/second";
+        description
+          "Represents the upper limit on the total bandwidth that can
+           be allocated to the traffic flow under any traffic
+           conditions. The maximum bandwidth must be greater than or equal
+           to the sum of any configured fixed and assured
+           bandwidth";
+      }
+    }
+  }
+  container line-profiles {
+    description
+      "All config data for line profile.";
+    list line-profile {
+      key "name";
+      description
+        "List of line profiles.";
+      leaf name {
+        type string {
+          length "1..32";
+        }
+        description
+          "The line profile name.";
+      }
+      container virtual-ports {
+        description
+          "All config data for virtual ports of the network termination.";
+        list virtual-port {
+          key "name";
+          description
+            "List of virtual ports.";
+          leaf name {
+            type string;
+            description
+              "Name of virtual port.";
+          }
+          leaf line-bandwidth-ref {
+            type line-bandwidth-ref;
+            description
+              "A reference to a network termination line bandwidth profile.";
+          }
+          list match-criteria {
+            key "name";
+            description
+              "List of match criterias.";
+            leaf name {
+              type string;
+              description
+                "Name of match criteria.";
+            }
+            leaf uni-port {
+              type uint8;
+              description
+                "Indicates the user-side port of the network termination.";
+            }
+            leaf vlan {
+              type uint32 {
+                range "0.. 4095 | 65533";
+              }
+              description
+                "Indicates the VLAN ID of the service. The value 65533 indicates untag traffic stream.";
+            }
+            leaf priority {
+              type uint32 {
+                range "0..7";
+              }
+              description
+                "Indicates the priority of the service.";
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -133,6 +133,22 @@ func StartNewPlugin(ctx context.Context, schemaMountFilePath string) (*SysrepoPl
 	defer freeCString(devicesModule)
 	defer freeCString(devicesPath)
 
+	servicesModule := C.CString(core.ServiceProfileModule)
+	servicesPath := C.CString(core.ServiceProfilesPath + "/*")
+	defer freeCString(servicesModule)
+	defer freeCString(servicesPath)
+
+	vlansModule := C.CString(core.VlansModule)
+	vlansPath := C.CString(core.VlansPath + "/*")
+	defer freeCString(vlansModule)
+	defer freeCString(vlansPath)
+
+	bwProfilesModule := C.CString(core.BandwidthProfileModule)
+	bwProfilesPath := C.CString(core.BandwidthProfilesPath + "/*")
+	defer freeCString(bwProfilesModule)
+	defer freeCString(bwProfilesPath)
+
+	//Get devices
 	errCode := C.sr_oper_get_subscribe(
 		plugin.operationalSession,
 		devicesModule,
@@ -143,7 +159,90 @@ func StartNewPlugin(ctx context.Context, schemaMountFilePath string) (*SysrepoPl
 		&plugin.subscription,
 	)
 	if errCode != C.SR_ERR_OK {
-		err := fmt.Errorf("sysrepo-failed-subscription-to-get-events")
+		err := fmt.Errorf("sysrepo-failed-subscription-to-get-devices")
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
+		return nil, err
+	}
+
+	//Get services
+	errCode = C.sr_oper_get_subscribe(
+		plugin.operationalSession,
+		servicesModule,
+		servicesPath,
+		C.function(C.get_services_cb_wrapper),
+		C.NULL,
+		C.SR_SUBSCR_DEFAULT,
+		&plugin.subscription,
+	)
+	if errCode != C.SR_ERR_OK {
+		err := fmt.Errorf("sysrepo-failed-subscription-to-get-services")
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
+		return nil, err
+	}
+
+	//Get vlans
+	errCode = C.sr_oper_get_subscribe(
+		plugin.operationalSession,
+		vlansModule,
+		vlansPath,
+		C.function(C.get_vlans_cb_wrapper),
+		C.NULL,
+		C.SR_SUBSCR_DEFAULT,
+		&plugin.subscription,
+	)
+	if errCode != C.SR_ERR_OK {
+		err := fmt.Errorf("sysrepo-failed-subscription-to-get-services")
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
+		return nil, err
+	}
+
+	//Get bandwidth profiles
+	errCode = C.sr_oper_get_subscribe(
+		plugin.operationalSession,
+		bwProfilesModule,
+		bwProfilesPath,
+		C.function(C.get_bandwidth_profiles_cb_wrapper),
+		C.NULL,
+		C.SR_SUBSCR_DEFAULT,
+		&plugin.subscription,
+	)
+	if errCode != C.SR_ERR_OK {
+		err := fmt.Errorf("sysrepo-failed-subscription-to-get-services")
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
+		return nil, err
+	}
+
+	//Subscribe with a callback to changes of configuration in the services modules
+	//Changes to services
+	errCode = C.sr_module_change_subscribe(
+		plugin.runningSession,
+		servicesModule,
+		servicesPath,
+		C.function(C.edit_service_profiles_cb_wrapper),
+		unsafe.Pointer(plugin.runningSession), //Pass session for running datastore to get current data
+		0,
+		C.SR_SUBSCR_DEFAULT,
+		&plugin.subscription,
+	)
+	if errCode != C.SR_ERR_OK {
+		err := fmt.Errorf("sysrepo-failed-subscription-to-change-services")
+		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
+		return nil, err
+	}
+
+	//Changes to VLANs
+	errCode = C.sr_module_change_subscribe(
+		plugin.runningSession,
+		vlansModule,
+		vlansPath,
+		C.function(C.edit_vlans_cb_wrapper),
+		C.NULL,
+		0,
+		C.SR_SUBSCR_DEFAULT,
+		&plugin.subscription,
+	)
+	if errCode != C.SR_ERR_OK {
+		err := fmt.Errorf("sysrepo-failed-subscription-to-change-vlans")
 		logger.Errorw(ctx, err.Error(), log.Fields{"errCode": errCode, "errMsg": srErrorMsg(errCode)})
 		return nil, err
 	}

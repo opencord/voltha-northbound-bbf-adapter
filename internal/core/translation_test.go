@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
 	"github.com/opencord/voltha-protos/v5/go/openflow_13"
 	"github.com/opencord/voltha-protos/v5/go/voltha"
 	"github.com/stretchr/testify/assert"
@@ -43,7 +44,22 @@ func getItemWithPath(items []YangItem, path string) (value string, ok bool) {
 
 func TestDevicePath(t *testing.T) {
 	path := getDevicePath(testDeviceId)
-	assert.Equal(t, fmt.Sprintf("/bbf-device-aggregation:devices/device[name='%s']", testDeviceId), path)
+	assert.Equal(t, "/bbf-device-aggregation:devices/device[name='123145abcdef']", path)
+}
+
+func TestDeviceHardwarePath(t *testing.T) {
+	path := getDeviceHardwarePath(testDeviceId)
+	assert.Equal(t, "/bbf-device-aggregation:devices/device[name='123145abcdef']/data/ietf-hardware:hardware/component[name='123145abcdef']", path)
+}
+
+func TestServicePortPath(t *testing.T) {
+	path := GetServicePortPath("testService", "testPort")
+	assert.Equal(t, "/bbf-nt-service-profile:service-profiles/service-profile[name='testService']/ports/port[name='testPort']", path)
+}
+
+func TestVlansPath(t *testing.T) {
+	path := GetVlansPath("testProfile")
+	assert.Equal(t, "/bbf-l2-access-attributes:vlan-translation-profiles/vlan-translation-profile[name='testProfile']", path)
 }
 
 func TestTranslateDevice(t *testing.T) {
@@ -115,6 +131,8 @@ func TestTranslateDevice(t *testing.T) {
 		FirmwareVersion: "v0.0.3",
 		AdminState:      voltha.AdminState_ENABLED,
 		OperStatus:      voltha.OperStatus_ACTIVE,
+		ParentId:        "abcdef1234",
+		ParentPortNo:    1,
 	}
 	items = translateDevice(onu)
 
@@ -153,6 +171,14 @@ func TestTranslateDevice(t *testing.T) {
 		{
 			Path:  onuHwPath + "/state/oper-state",
 			Value: ietfOperStateEnabled,
+		},
+		{
+			Path:  onuHwPath + "/parent",
+			Value: "abcdef1234",
+		},
+		{
+			Path:  onuHwPath + "/parent-rel-pos",
+			Value: "1",
 		},
 	}
 
@@ -294,6 +320,195 @@ func TestTranslateOnuActive(t *testing.T) {
 	for _, e := range expected {
 		val, ok := getItemWithPath(notificationItems, e.Path)
 		assert.True(t, ok, e.Path+" missing for notification")
+		assert.Equal(t, e.Value, val, "Wrong value for "+e.Path)
+	}
+}
+
+func TestTranslateServices(t *testing.T) {
+	subscribers := []clients.ProgrammedSubscriber{
+		{
+			Location: "of:00001/256",
+			TagInfo: clients.SadisUniTag{
+				UniTagMatch:                 100,
+				PonCTag:                     4096,
+				PonSTag:                     102,
+				TechnologyProfileID:         64,
+				UpstreamBandwidthProfile:    "BW1",
+				DownstreamBandwidthProfile:  "BW2",
+				UpstreamOltBandwidthProfile: "OLTBW",
+				IsDhcpRequired:              true,
+				IsIgmpRequired:              false,
+				IsPPPoERequired:             false,
+				ConfiguredMacAddress:        "00:11:22:33:44:55",
+				EnableMacLearning:           true,
+				UsPonCTagPriority:           1,
+				UsPonSTagPriority:           2,
+				DsPonCTagPriority:           3,
+				DsPonSTagPriority:           -1,
+				ServiceName:                 "testService",
+			},
+		},
+	}
+
+	ports := []clients.OnosPort{
+		{
+			Element: "of:00001",
+			Port:    "256",
+			Annotations: map[string]string{
+				"portName": "TESTPORT-1",
+			},
+		},
+		{
+			Element: "of:00001",
+			Port:    "257",
+			Annotations: map[string]string{
+				"portName": "TESTPORT-2",
+			},
+		},
+	}
+
+	servicesItesm, err := translateServices(subscribers, ports)
+	assert.Nil(t, err, "Translation error")
+
+	assert.NotEmpty(t, servicesItesm, "No services items")
+
+	servicePortPath := ServiceProfilesPath + "/service-profile[name='TESTPORT-1-testService']/ports/port[name='TESTPORT-1']"
+
+	expected := []YangItem{
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:configured-mac-address",
+			Value: "00:11:22:33:44:55",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:upstream-subscriber-bp-name",
+			Value: "BW1",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:downstream-subscriber-bp-name",
+			Value: "BW2",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:upstream-olt-bp-name",
+			Value: "OLTBW",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:mac-learning-enabled",
+			Value: "true",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:dhcp-required",
+			Value: "true",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:igmp-required",
+			Value: "false",
+		},
+		{
+			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:pppoe-required",
+			Value: "false",
+		},
+	}
+
+	_, ok := getItemWithPath(servicesItesm, servicePortPath+"/port-vlans/port-vlan[name='TESTPORT-1-testService']")
+	assert.True(t, ok, "No vlans leafref in services")
+
+	_, ok = getItemWithPath(servicesItesm, servicePortPath+"/bbf-nt-service-profile-voltha:downstream-olt-bp-name")
+	assert.False(t, ok, "Downstream OLT bandwidth profile should not be present")
+
+	for _, e := range expected {
+		val, ok := getItemWithPath(servicesItesm, e.Path)
+		assert.True(t, ok, e.Path+" missing for services")
+		assert.Equal(t, e.Value, val, "Wrong value for "+e.Path)
+	}
+}
+
+func TestTranslateVlans(t *testing.T) {
+	subscribers := []clients.ProgrammedSubscriber{
+		{
+			Location: "of:00001/256",
+			TagInfo: clients.SadisUniTag{
+				UniTagMatch:                 100,
+				PonCTag:                     4096,
+				PonSTag:                     102,
+				TechnologyProfileID:         64,
+				UpstreamBandwidthProfile:    "BW1",
+				DownstreamBandwidthProfile:  "BW2",
+				UpstreamOltBandwidthProfile: "OLTBW",
+				IsDhcpRequired:              true,
+				IsIgmpRequired:              false,
+				IsPPPoERequired:             false,
+				ConfiguredMacAddress:        "00:11:22:33:44:55",
+				EnableMacLearning:           true,
+				UsPonCTagPriority:           1,
+				UsPonSTagPriority:           2,
+				DsPonCTagPriority:           3,
+				DsPonSTagPriority:           -1,
+				ServiceName:                 "testService",
+			},
+		},
+	}
+
+	ports := []clients.OnosPort{
+		{
+			Element: "of:00001",
+			Port:    "256",
+			Annotations: map[string]string{
+				"portName": "TESTPORT-1",
+			},
+		},
+		{
+			Element: "of:00001",
+			Port:    "257",
+			Annotations: map[string]string{
+				"portName": "TESTPORT-2",
+			},
+		},
+	}
+
+	vlanItems, err := translateVlans(subscribers, ports)
+	assert.Nil(t, err, "Translation error")
+
+	assert.NotEmpty(t, vlanItems, "No vlans items")
+
+	vlanPath := VlansPath + "/vlan-translation-profile[name='TESTPORT-1-testService']"
+
+	expected := []YangItem{
+		{
+			Path:  vlanPath + "/match-criteria/outer-tag/vlan-id",
+			Value: "100",
+		},
+		{
+			Path:  vlanPath + "/ingress-rewrite/push-second-tag/vlan-id",
+			Value: "any",
+		},
+		{
+			Path:  vlanPath + "/ingress-rewrite/push-outer-tag/vlan-id",
+			Value: "102",
+		},
+		{
+			Path:  vlanPath + "/match-criteria/second-tag/vlan-id",
+			Value: "any",
+		},
+		{
+			Path:  vlanPath + "/ingress-rewrite/push-second-tag/pbit",
+			Value: "1",
+		},
+		{
+			Path:  vlanPath + "/ingress-rewrite/push-outer-tag/pbit",
+			Value: "2",
+		},
+		{
+			Path:  vlanPath + "/ingress-rewrite/push-second-tag/bbf-voltha-vlan-translation:dpbit",
+			Value: "3",
+		},
+	}
+
+	_, ok := getItemWithPath(vlanItems, vlanPath+"/ingress-rewrite/push-outer-tag/bbf-voltha-vlan-translation:dpbit")
+	assert.False(t, ok, "Pbit value should not be present")
+
+	for _, e := range expected {
+		val, ok := getItemWithPath(vlanItems, e.Path)
+		assert.True(t, ok, e.Path+" missing for vlans")
 		assert.Equal(t, e.Value, val, "Wrong value for "+e.Path)
 	}
 }

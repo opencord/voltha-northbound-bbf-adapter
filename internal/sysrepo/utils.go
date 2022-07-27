@@ -135,7 +135,7 @@ func updateYangTree(ctx context.Context, session *C.sr_session_ctx_t, parent **C
 		path := C.CString(item.Path)
 		value := C.CString(item.Value)
 
-		lyErr := C.lyd_new_path(*parent, ly_ctx, path, value, 0, nil)
+		lyErr := C.lyd_new_path(*parent, ly_ctx, path, value, C.LYD_NEW_PATH_UPDATE, nil)
 		if lyErr != C.LY_SUCCESS {
 			freeCString(path)
 			freeCString(value)
@@ -170,4 +170,111 @@ func editDatastore(ctx context.Context, session *C.sr_session_ctx_t, editsTree *
 	}
 
 	return nil
+}
+
+type YangChange struct {
+	Path      string
+	Value     string
+	Operation C.sr_change_oper_t
+	/* Operation values:
+	SR_OP_CREATED
+	SR_OP_MODIFIED
+	SR_OP_DELETED
+	SR_OP_MOVED
+	*/
+}
+
+//Provides a list of the changes occured under a specific path
+//Should only be used on the session from an sr_module_change_subscribe callback
+func getChangesList(ctx context.Context, editSession *C.sr_session_ctx_t, path string) ([]YangChange, error) {
+	result := []YangChange{}
+
+	changesPath := C.CString(path)
+	defer freeCString(changesPath)
+
+	var changesIterator *C.sr_change_iter_t
+	errCode := C.sr_get_changes_iter(editSession, changesPath, &changesIterator)
+	if errCode != C.SR_ERR_OK {
+		return nil, fmt.Errorf("cannot-get-iterator: %d %s", errCode, srErrorMsg(errCode))
+	}
+	defer C.sr_free_change_iter(changesIterator)
+
+	//Iterate over the changes
+	var operation C.sr_change_oper_t
+	var prevValue, prevList *C.char
+	var prevDefault C.int
+
+	var node *C.lyd_node
+	defer C.lyd_free_all(node)
+
+	errCode = C.sr_get_change_tree_next(editSession, changesIterator, &operation, &node, &prevValue, &prevList, &prevDefault)
+	for errCode != C.SR_ERR_NOT_FOUND {
+		if errCode != C.SR_ERR_OK {
+			return nil, fmt.Errorf("next-change-error: %d %s", errCode, srErrorMsg(errCode))
+		}
+
+		currentChange := YangChange{}
+		currentChange.Operation = operation
+
+		nodePath := C.lyd_path(node, C.LYD_PATH_STD, nil, 0)
+		if nodePath == nil {
+			return nil, fmt.Errorf("cannot-get-change-path")
+		}
+		currentChange.Path = C.GoString(nodePath)
+		freeCString(nodePath)
+
+		nodeValue := C.lyd_get_value(node)
+		if nodeValue != nil {
+			currentChange.Value = C.GoString(nodeValue)
+			result = append(result, currentChange)
+		}
+
+		errCode = C.sr_get_change_tree_next(editSession, changesIterator, &operation, &node, &prevValue, &prevList, &prevDefault)
+	}
+
+	return result, nil
+}
+
+//Verify that only one change occured under the specified path, and return its value
+//Should only be used on the session from an sr_module_change_subscribe callback
+func getSingleChangeValue(ctx context.Context, session *C.sr_session_ctx_t, path string) (string, error) {
+	changesList, err := getChangesList(ctx, session, path)
+	if err != nil {
+		return "", err
+	}
+
+	if len(changesList) != 1 {
+		logger.Errorw(ctx, "unexpected-number-of-yang-changes", log.Fields{
+			"changes": changesList,
+		})
+		return "", fmt.Errorf("unexpected-number-of-yang-changes")
+	}
+
+	return changesList[0].Value, nil
+}
+
+//Get the value of a leaf from the datastore
+//The target datastore is the one on which the session has been created
+func getDatastoreLeafValue(ctx context.Context, session *C.sr_session_ctx_t, path string) (string, error) {
+	cPath := C.CString(path)
+	defer freeCString(cPath)
+
+	var data *C.sr_data_t
+	defer C.sr_release_data(data)
+
+	errCode := C.sr_get_subtree(session, cPath, 0, &data)
+	if errCode != C.SR_ERR_OK {
+		return "", fmt.Errorf("cannot-get-data-from-datastore: %d %s", errCode, srErrorMsg(errCode))
+	}
+
+	if data == nil {
+		return "", fmt.Errorf("no-data-found-for-path: %s", path)
+	}
+
+	nodeValue := C.lyd_get_value(data.tree)
+	if nodeValue == nil {
+		return "", fmt.Errorf("cannot-get-value-from-data: %s", path)
+	}
+
+	return C.GoString(nodeValue), nil
 }

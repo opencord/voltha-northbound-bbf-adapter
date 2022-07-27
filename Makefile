@@ -50,10 +50,10 @@ DOCKER_BUILD_ARGS ?= \
 VOLTHA_TOOLS_VERSION ?= 2.5.3
 
 # Dependencies versions
-LIBYANG_VERSION		?= 9ad76850c140466488422c99f4ca01bf635b828a
-SYSREPO_VERSION		?= 9ef472743e57e346a820cede2e5d747713eb4197
+LIBYANG_VERSION		  ?= af90d335489d12c4779b62e97f75d9efb14ff60e
+SYSREPO_VERSION		  ?= f6cac7068cd5b7f20512ac1e3ed81e16ac1900e1
 LIBNETCONF2_VERSION	?= 4d9d7993d710f1a9d17657e19a2d1eec803f3d6b
-NETOPEER2_VERSION	?= ebb5b0bfd89a77311724f35339d466abab96b743
+NETOPEER2_VERSION	  ?= 92f47fd547d0ab7b2afc59175c8f56ff360591b6
 
 # Default user and password for the netconf user in docker-build
 NETCONF_USER ?= voltha
@@ -61,7 +61,7 @@ NETCONF_PASSWORD ?= onf
 
 # This container is built to include the necessary sysrepo libraries
 # to succesfully build and test the code in this repository
-BUILDER_IMAGE_AND_TAG ?= voltha/bbf-adapter-builder:local 
+BUILDER_IMAGE_AND_TAG ?= voltha/bbf-adapter-builder:local
 build-tools: build/tools/Dockerfile.builder
 	docker build \
 	  -t ${BUILDER_IMAGE_AND_TAG} \

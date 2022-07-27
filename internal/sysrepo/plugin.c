@@ -42,6 +42,11 @@ LY_ERR mountpoint_ext_data_clb(
 
 // Exported by callbacks.go
 sr_error_t get_devices_cb(sr_session_ctx_t *session, lyd_node **parent);
+sr_error_t get_services_cb(sr_session_ctx_t *session, lyd_node **parent);
+sr_error_t get_vlans_cb(sr_session_ctx_t *session, lyd_node **parent);
+sr_error_t get_bandwidth_profiles_cb(sr_session_ctx_t *session, lyd_node **parent);
+sr_error_t edit_service_profiles_cb(sr_session_ctx_t *session, sr_session_ctx_t *runningSession, sr_event_t event);
+sr_error_t edit_vlans_cb(sr_session_ctx_t *session, sr_event_t event);
 
 //The wrapper functions are needed because CGO cannot express some keywords
 //such as "const", and thus it can't match sysrepo's callback signature
@@ -57,4 +62,68 @@ int get_devices_cb_wrapper(
     void *private_data)
 {
     return get_devices_cb(session, parent);
+}
+
+int get_services_cb_wrapper(
+    sr_session_ctx_t *session,
+    uint32_t subscription_id,
+    const char *module_name,
+    const char *path,
+    const char *request_xpath,
+    uint32_t request_id,
+    struct lyd_node **parent,
+    void *private_data)
+{
+    return get_services_cb(session, parent);
+}
+
+int get_vlans_cb_wrapper(
+    sr_session_ctx_t *session,
+    uint32_t subscription_id,
+    const char *module_name,
+    const char *path,
+    const char *request_xpath,
+    uint32_t request_id,
+    struct lyd_node **parent,
+    void *private_data)
+{
+    return get_vlans_cb(session, parent);
+}
+
+int get_bandwidth_profiles_cb_wrapper(
+    sr_session_ctx_t *session,
+    uint32_t subscription_id,
+    const char *module_name,
+    const char *path,
+    const char *request_xpath,
+    uint32_t request_id,
+    struct lyd_node **parent,
+    void *private_data)
+{
+    return get_bandwidth_profiles_cb(session, parent);
+}
+
+int edit_service_profiles_cb_wrapper(
+    sr_session_ctx_t *session,
+    uint32_t subscription_id,
+    const char *module_name,
+    const char *path,
+    sr_event_t event,
+    uint32_t request_id,
+    void *private_data)
+{
+    sr_session_ctx_t* runningSession = (sr_session_ctx_t*)private_data;
+    return edit_service_profiles_cb(session, runningSession, event);
+}
+
+int edit_vlans_cb_wrapper(
+    sr_session_ctx_t *session,
+    uint32_t subscription_id,
+    const char *module_name,
+    const char *path,
+    sr_event_t event,
+    uint32_t request_id,
+    void *private_data)
+{
+    return edit_vlans_cb(session, event);
 }

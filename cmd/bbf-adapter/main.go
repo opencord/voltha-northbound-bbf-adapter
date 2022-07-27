@@ -42,7 +42,7 @@ const (
 type bbfAdapter struct {
 	conf            *config.BBFAdapterConfig
 	volthaNbiClient *clients.VolthaNbiClient
-	oltAppClient    *clients.OltAppClient
+	onosClient      *clients.OnosClient
 	sysrepoPlugin   *sysrepo.SysrepoPlugin
 	kafkaConsumer   *clients.KafkaConsumer
 }
@@ -65,15 +65,15 @@ func (a *bbfAdapter) start(ctx context.Context) {
 	}
 
 	//Check if the REST APIs of the olt app are reachable
-	a.oltAppClient = clients.NewOltAppClient(a.conf.OnosRestEndpoint, a.conf.OnosUser, a.conf.OnosPassword)
-	if err := a.oltAppClient.CheckConnection(ctx); err != nil {
+	a.onosClient = clients.NewOnosClient(a.conf.OnosRestEndpoint, a.conf.OnosUser, a.conf.OnosPassword)
+	if err := a.onosClient.CheckConnection(ctx); err != nil {
 		logger.Fatalw(ctx, "failed-to-connect-to-onos-olt-app-api", log.Fields{"err": err})
 	} else {
 		probe.UpdateStatusFromContext(ctx, a.conf.OnosRestEndpoint, probe.ServiceStatusRunning)
 	}
 
 	//Create the global adapter that will be used by callbacks
-	core.AdapterInstance = core.NewVolthaYangAdapter(a.volthaNbiClient, a.oltAppClient)
+	core.AdapterInstance = core.NewVolthaYangAdapter(a.volthaNbiClient, a.onosClient)
 
 	//Load sysrepo plugin
 	a.sysrepoPlugin, err = sysrepo.StartNewPlugin(ctx, a.conf.SchemaMountFilePath)

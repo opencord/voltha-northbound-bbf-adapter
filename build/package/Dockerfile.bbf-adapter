@@ -104,7 +104,6 @@ RUN echo $NETCONF_USER:$NETCONF_PASSWORD | chpasswd
 
 # Copy yang files and install them to sysrepo
 COPY ./build/yang-files /yang
-RUN for f in /yang/*.yang; do sysrepoctl -i "$f" -s /yang -o $NETCONF_USER -g netconf -p 664 -v3; done
 RUN for f in /yang/*/*.yang; do sysrepoctl -i "$f" -s /yang -o $NETCONF_USER -g netconf -p 664 -v3; done
 
 COPY ./build/config /config

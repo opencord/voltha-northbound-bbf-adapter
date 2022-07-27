@@ -9,6 +9,7 @@ Instead, on its southbound, it interacts with VOLTHA's northbound APIs and the O
 # Additional documentation
 
 - [Deployment](deploy.md)
+- [Supported operations](supported_operations.md)
 - [Code structure](code_structure.md)
 - [Expanding functionality](expanding.md)
 - [Output examples](output_examples.md)

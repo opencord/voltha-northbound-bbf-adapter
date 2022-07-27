@@ -18,8 +18,10 @@ package core
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/opencord/voltha-northbound-bbf-adapter/internal/clients"
 	"github.com/opencord/voltha-protos/v5/go/common"
 	"github.com/opencord/voltha-protos/v5/go/voltha"
 )
@@ -27,6 +29,15 @@ import (
 const (
 	DeviceAggregationModule = "bbf-device-aggregation"
 	DevicesPath             = "/" + DeviceAggregationModule + ":devices"
+
+	ServiceProfileModule = "bbf-nt-service-profile"
+	ServiceProfilesPath  = "/" + ServiceProfileModule + ":service-profiles"
+
+	VlansModule = "bbf-l2-access-attributes"
+	VlansPath   = "/" + VlansModule + ":vlan-translation-profiles"
+
+	BandwidthProfileModule = "bbf-nt-line-profile"
+	BandwidthProfilesPath  = "/" + BandwidthProfileModule + ":line-bandwidth-profiles"
 
 	//Device types
 	DeviceTypeOlt = "bbf-device-types:olt"
@@ -49,6 +60,10 @@ const (
 	eventContextKeyPonId = "pon-id"
 	eventContextKeyOnuSn = "serial-number"
 	eventContextKeyOltSn = "olt-serial-number"
+
+	//Values to allow any VLAN ID
+	YangVlanIdAny   = "any"
+	VolthaVlanIdAny = 4096
 )
 
 type YangItem struct {
@@ -64,6 +79,16 @@ func getDevicePath(id string) string {
 //getDevicePath returns the yang path to the root of the device's hardware module in its data mountpoint
 func getDeviceHardwarePath(id string) string {
 	return fmt.Sprintf("%s/device[name='%s']/data/ietf-hardware:hardware/component[name='%s']", DevicesPath, id, id)
+}
+
+//GetServicePortPath returns the yang path to a service's port node
+func GetServicePortPath(serviceName string, portName string) string {
+	return fmt.Sprintf("%s/service-profile[name='%s']/ports/port[name='%s']", ServiceProfilesPath, serviceName, portName)
+}
+
+//GetVlansPath returns the yang path to a vlan translation profile's root node
+func GetVlansPath(serviceName string) string {
+	return fmt.Sprintf("%s/vlan-translation-profile[name='%s']", VlansPath, serviceName)
 }
 
 //ietfHardwareAdminState returns the string that represents the ietf-hardware admin state
@@ -146,10 +171,20 @@ func translateDevice(device *voltha.Device) []YangItem {
 		})
 	} else {
 		//ONU
-		result = append(result, YangItem{
-			Path:  devicePath + "/type",
-			Value: DeviceTypeOnu,
-		})
+		result = append(result, []YangItem{
+			{
+				Path:  devicePath + "/type",
+				Value: DeviceTypeOnu,
+			},
+			{
+				Path:  hardwarePath + "/parent",
+				Value: device.ParentId,
+			},
+			{
+				Path:  hardwarePath + "/parent-rel-pos",
+				Value: strconv.FormatUint(uint64(device.ParentPortNo), 10),
+			},
+		}...)
 	}
 
 	//Vendor name
@@ -283,4 +318,194 @@ func TranslateOnuActivatedEvent(eventHeader *voltha.EventHeader, deviceEvent *vo
 	}
 
 	return notification, channelTermination, nil
+}
+
+//translateServices returns a slice of yang items that represent the currently programmed services
+func translateServices(subscribers []clients.ProgrammedSubscriber, ports []clients.OnosPort) ([]YangItem, error) {
+	//Create a map of port IDs to port names
+	//e.g. of:00000a0a0a0a0a0a/256 to BBSM000a0001-1
+	portNames := map[string]string{}
+
+	for _, port := range ports {
+		portId := fmt.Sprintf("%s/%s", port.Element, port.Port)
+		name, ok := port.Annotations["portName"]
+		if ok {
+			portNames[portId] = name
+		}
+	}
+
+	result := []YangItem{}
+
+	for _, subscriber := range subscribers {
+		portName, ok := portNames[subscriber.Location]
+		if !ok {
+			return nil, fmt.Errorf("no-port-name-for-location: %s", subscriber.Location)
+		}
+
+		serviceName := fmt.Sprintf("%s-%s", portName, subscriber.TagInfo.ServiceName)
+
+		portPath := GetServicePortPath(serviceName, portName)
+
+		if subscriber.TagInfo.ConfiguredMacAddress != "" {
+			result = append(result, YangItem{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:configured-mac-address",
+				Value: subscriber.TagInfo.ConfiguredMacAddress,
+			})
+		}
+
+		result = append(result, []YangItem{
+			{
+				Path:  fmt.Sprintf("%s/port-vlans/port-vlan[name='%s']", portPath, serviceName),
+				Value: "",
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:technology-profile-id",
+				Value: strconv.Itoa(subscriber.TagInfo.TechnologyProfileID),
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:downstream-subscriber-bp-name",
+				Value: subscriber.TagInfo.DownstreamBandwidthProfile,
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:upstream-subscriber-bp-name",
+				Value: subscriber.TagInfo.UpstreamBandwidthProfile,
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:mac-learning-enabled",
+				Value: strconv.FormatBool(subscriber.TagInfo.EnableMacLearning),
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:dhcp-required",
+				Value: strconv.FormatBool(subscriber.TagInfo.IsDhcpRequired),
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:igmp-required",
+				Value: strconv.FormatBool(subscriber.TagInfo.IsIgmpRequired),
+			},
+			{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:pppoe-required",
+				Value: strconv.FormatBool(subscriber.TagInfo.IsPPPoERequired),
+			},
+		}...)
+
+		if subscriber.TagInfo.UpstreamOltBandwidthProfile != "" {
+			result = append(result, YangItem{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:upstream-olt-bp-name",
+				Value: subscriber.TagInfo.UpstreamOltBandwidthProfile,
+			})
+		}
+
+		if subscriber.TagInfo.DownstreamOltBandwidthProfile != "" {
+			result = append(result, YangItem{
+				Path:  portPath + "/bbf-nt-service-profile-voltha:downstream-olt-bp-name",
+				Value: subscriber.TagInfo.UpstreamOltBandwidthProfile,
+			})
+		}
+	}
+
+	return result, nil
+}
+
+//translateVlans returns a slice of yang items that represent the vlans used by programmed services
+func translateVlans(subscribers []clients.ProgrammedSubscriber, ports []clients.OnosPort) ([]YangItem, error) {
+	//Create a map of port IDs to port names
+	//e.g. of:00000a0a0a0a0a0a/256 to BBSM000a0001-1
+	portNames := map[string]string{}
+
+	for _, port := range ports {
+		portId := fmt.Sprintf("%s/%s", port.Element, port.Port)
+		name, ok := port.Annotations["portName"]
+		if ok {
+			portNames[portId] = name
+		}
+	}
+
+	result := []YangItem{}
+
+	for _, subscriber := range subscribers {
+		portName, ok := portNames[subscriber.Location]
+		if !ok {
+			return nil, fmt.Errorf("no-port-name-for-location: %s", subscriber.Location)
+		}
+
+		serviceName := fmt.Sprintf("%s-%s", portName, subscriber.TagInfo.ServiceName)
+
+		vlansPath := GetVlansPath(serviceName)
+
+		uniTagMatch := YangVlanIdAny
+		sTag := YangVlanIdAny
+		cTag := YangVlanIdAny
+
+		if subscriber.TagInfo.UniTagMatch != VolthaVlanIdAny {
+			uniTagMatch = strconv.Itoa(subscriber.TagInfo.UniTagMatch)
+		}
+		if subscriber.TagInfo.PonSTag != VolthaVlanIdAny {
+			sTag = strconv.Itoa(subscriber.TagInfo.PonSTag)
+		}
+		if subscriber.TagInfo.PonCTag != VolthaVlanIdAny {
+			cTag = strconv.Itoa(subscriber.TagInfo.PonCTag)
+		}
+
+		if subscriber.TagInfo.UniTagMatch > 0 {
+			result = append(result, []YangItem{
+				{
+					Path:  vlansPath + "/match-criteria/outer-tag/vlan-id",
+					Value: uniTagMatch,
+				},
+				{
+					Path:  vlansPath + "/match-criteria/second-tag/vlan-id",
+					Value: "any",
+				},
+			}...)
+		}
+
+		if subscriber.TagInfo.UsPonSTagPriority >= 0 {
+			result = append(result, YangItem{
+				Path:  vlansPath + "/ingress-rewrite/push-outer-tag/pbit",
+				Value: strconv.Itoa(subscriber.TagInfo.UsPonSTagPriority),
+			})
+		}
+		if subscriber.TagInfo.DsPonSTagPriority >= 0 {
+			result = append(result, YangItem{
+				Path:  vlansPath + "/ingress-rewrite/push-outer-tag/bbf-voltha-vlan-translation:dpbit",
+				Value: strconv.Itoa(subscriber.TagInfo.DsPonSTagPriority),
+			})
+		}
+		if subscriber.TagInfo.UsPonCTagPriority >= 0 {
+			result = append(result, YangItem{
+				Path:  vlansPath + "/ingress-rewrite/push-second-tag/pbit",
+				Value: strconv.Itoa(subscriber.TagInfo.UsPonCTagPriority),
+			})
+		}
+		if subscriber.TagInfo.DsPonCTagPriority >= 0 {
+			result = append(result, YangItem{
+				Path:  vlansPath + "/ingress-rewrite/push-second-tag/bbf-voltha-vlan-translation:dpbit",
+				Value: strconv.Itoa(subscriber.TagInfo.DsPonCTagPriority),
+			})
+		}
+
+		result = append(result, []YangItem{
+			{
+				Path:  vlansPath + "/ingress-rewrite/push-outer-tag/vlan-id",
+				Value: sTag,
+			},
+			{
+				Path:  vlansPath + "/ingress-rewrite/push-second-tag/vlan-id",
+				Value: cTag,
+			},
+		}...)
+	}
+
+	return result, nil
+}
+
+//translateBandwidthProfiles returns a slice of yang items that represent the bandwidth profiles used by programmed services
+func translateBandwidthProfiles(bwProfiles []clients.BandwidthProfile) ([]YangItem, error) {
+	result := []YangItem{}
+
+	//TODO: The best way to translate this information is still under discussion, but the code
+	// to retrieve it is ready. Since this is not fundamental at the moment, an empty slice is
+	// returned, and the correct translation can be added here at a later time.
+
+	return result, nil
 }
