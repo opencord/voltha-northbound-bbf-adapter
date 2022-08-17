@@ -18,7 +18,7 @@
 
 <vlan-translation-profiles xmlns="urn:bbf:yang:bbf-l2-access-attributes">
     <vlan-translation-profile>
-        <name>BBSM000a0001-1-hsia</name>
+        <name>hsia-vlans</name>
         <ingress-rewrite>
             <push-outer-tag>
                 <vlan-id>900</vlan-id>
@@ -31,13 +31,13 @@
 </vlan-translation-profiles>
 <service-profiles xmlns="urn:bbf:yang:bbf-nt-service-profile">
     <service-profile>
-        <name>BBSM000a0001-1-hsia</name>
+        <name>hsia</name>
         <ports>
             <port>
                 <name>BBSM000a0001-1</name>
                 <port-vlans>
                     <port-vlan>
-                        <name>BBSM000a0001-1-hsia</name>
+                        <name>hsia-vlans</name>
                     </port-vlan>
                 </port-vlans>
                 <technology-profile-id xmlns="urn:bbf:yang:bbf-nt-service-profile-voltha">64</technology-profile-id>

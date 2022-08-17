@@ -325,49 +325,41 @@ func TestTranslateOnuActive(t *testing.T) {
 }
 
 func TestTranslateServices(t *testing.T) {
-	subscribers := []clients.ProgrammedSubscriber{
-		{
-			Location: "of:00001/256",
-			TagInfo: clients.SadisUniTag{
-				UniTagMatch:                 100,
-				PonCTag:                     4096,
-				PonSTag:                     102,
-				TechnologyProfileID:         64,
-				UpstreamBandwidthProfile:    "BW1",
-				DownstreamBandwidthProfile:  "BW2",
-				UpstreamOltBandwidthProfile: "OLTBW",
-				IsDhcpRequired:              true,
-				IsIgmpRequired:              false,
-				IsPPPoERequired:             false,
-				ConfiguredMacAddress:        "00:11:22:33:44:55",
-				EnableMacLearning:           true,
-				UsPonCTagPriority:           1,
-				UsPonSTagPriority:           2,
-				DsPonCTagPriority:           3,
-				DsPonSTagPriority:           -1,
-				ServiceName:                 "testService",
-			},
+	subscriber := clients.ProgrammedSubscriber{
+		Location: "of:00001/256",
+		TagInfo: clients.SadisUniTag{
+			UniTagMatch:                 100,
+			PonCTag:                     4096,
+			PonSTag:                     102,
+			TechnologyProfileID:         64,
+			UpstreamBandwidthProfile:    "BW1",
+			DownstreamBandwidthProfile:  "BW2",
+			UpstreamOltBandwidthProfile: "OLTBW",
+			IsDhcpRequired:              true,
+			IsIgmpRequired:              false,
+			IsPPPoERequired:             false,
+			ConfiguredMacAddress:        "00:11:22:33:44:55",
+			EnableMacLearning:           true,
+			UsPonCTagPriority:           1,
+			UsPonSTagPriority:           2,
+			DsPonCTagPriority:           3,
+			DsPonSTagPriority:           -1,
+			ServiceName:                 "testService",
 		},
 	}
 
-	ports := []clients.OnosPort{
-		{
-			Element: "of:00001",
-			Port:    "256",
-			Annotations: map[string]string{
-				"portName": "TESTPORT-1",
-			},
+	alias := ServiceAlias{
+		Key: ServiceKey{
+			Port: "TESTPORT-1",
+			STag: "101",
+			CTag: "102",
+			TpId: "64",
 		},
-		{
-			Element: "of:00001",
-			Port:    "257",
-			Annotations: map[string]string{
-				"portName": "TESTPORT-2",
-			},
-		},
+		ServiceName: "TESTPORT-1-testService",
+		VlansName:   "TESTPORT-1-testService-vlans",
 	}
 
-	servicesItesm, err := translateServices(subscribers, ports)
+	servicesItesm, err := translateService(subscriber.TagInfo, alias)
 	assert.Nil(t, err, "Translation error")
 
 	assert.NotEmpty(t, servicesItesm, "No services items")
@@ -378,18 +370,6 @@ func TestTranslateServices(t *testing.T) {
 		{
 			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:configured-mac-address",
 			Value: "00:11:22:33:44:55",
-		},
-		{
-			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:upstream-subscriber-bp-name",
-			Value: "BW1",
-		},
-		{
-			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:downstream-subscriber-bp-name",
-			Value: "BW2",
-		},
-		{
-			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:upstream-olt-bp-name",
-			Value: "OLTBW",
 		},
 		{
 			Path:  servicePortPath + "/bbf-nt-service-profile-voltha:mac-learning-enabled",
@@ -409,7 +389,7 @@ func TestTranslateServices(t *testing.T) {
 		},
 	}
 
-	_, ok := getItemWithPath(servicesItesm, servicePortPath+"/port-vlans/port-vlan[name='TESTPORT-1-testService']")
+	_, ok := getItemWithPath(servicesItesm, servicePortPath+"/port-vlans/port-vlan[name='TESTPORT-1-testService-vlans']")
 	assert.True(t, ok, "No vlans leafref in services")
 
 	_, ok = getItemWithPath(servicesItesm, servicePortPath+"/bbf-nt-service-profile-voltha:downstream-olt-bp-name")
@@ -423,54 +403,46 @@ func TestTranslateServices(t *testing.T) {
 }
 
 func TestTranslateVlans(t *testing.T) {
-	subscribers := []clients.ProgrammedSubscriber{
-		{
-			Location: "of:00001/256",
-			TagInfo: clients.SadisUniTag{
-				UniTagMatch:                 100,
-				PonCTag:                     4096,
-				PonSTag:                     102,
-				TechnologyProfileID:         64,
-				UpstreamBandwidthProfile:    "BW1",
-				DownstreamBandwidthProfile:  "BW2",
-				UpstreamOltBandwidthProfile: "OLTBW",
-				IsDhcpRequired:              true,
-				IsIgmpRequired:              false,
-				IsPPPoERequired:             false,
-				ConfiguredMacAddress:        "00:11:22:33:44:55",
-				EnableMacLearning:           true,
-				UsPonCTagPriority:           1,
-				UsPonSTagPriority:           2,
-				DsPonCTagPriority:           3,
-				DsPonSTagPriority:           -1,
-				ServiceName:                 "testService",
-			},
+	subscriber := clients.ProgrammedSubscriber{
+		Location: "of:00001/256",
+		TagInfo: clients.SadisUniTag{
+			UniTagMatch:                 100,
+			PonCTag:                     4096,
+			PonSTag:                     102,
+			TechnologyProfileID:         64,
+			UpstreamBandwidthProfile:    "BW1",
+			DownstreamBandwidthProfile:  "BW2",
+			UpstreamOltBandwidthProfile: "OLTBW",
+			IsDhcpRequired:              true,
+			IsIgmpRequired:              false,
+			IsPPPoERequired:             false,
+			ConfiguredMacAddress:        "00:11:22:33:44:55",
+			EnableMacLearning:           true,
+			UsPonCTagPriority:           1,
+			UsPonSTagPriority:           2,
+			DsPonCTagPriority:           3,
+			DsPonSTagPriority:           -1,
+			ServiceName:                 "testService",
 		},
 	}
 
-	ports := []clients.OnosPort{
-		{
-			Element: "of:00001",
-			Port:    "256",
-			Annotations: map[string]string{
-				"portName": "TESTPORT-1",
-			},
+	alias := ServiceAlias{
+		Key: ServiceKey{
+			Port: "TESTPORT-1",
+			STag: "101",
+			CTag: "102",
+			TpId: "64",
 		},
-		{
-			Element: "of:00001",
-			Port:    "257",
-			Annotations: map[string]string{
-				"portName": "TESTPORT-2",
-			},
-		},
+		ServiceName: "TESTPORT-1-testService",
+		VlansName:   "TESTPORT-1-testService-vlans",
 	}
 
-	vlanItems, err := translateVlans(subscribers, ports)
+	vlanItems, err := translateVlans(subscriber.TagInfo, alias)
 	assert.Nil(t, err, "Translation error")
 
 	assert.NotEmpty(t, vlanItems, "No vlans items")
 
-	vlanPath := VlansPath + "/vlan-translation-profile[name='TESTPORT-1-testService']"
+	vlanPath := VlansPath + "/vlan-translation-profile[name='TESTPORT-1-testService-vlans']"
 
 	expected := []YangItem{
 		{

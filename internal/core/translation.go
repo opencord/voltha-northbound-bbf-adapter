@@ -320,181 +320,122 @@ func TranslateOnuActivatedEvent(eventHeader *voltha.EventHeader, deviceEvent *vo
 	return notification, channelTermination, nil
 }
 
-//translateServices returns a slice of yang items that represent the currently programmed services
-func translateServices(subscribers []clients.ProgrammedSubscriber, ports []clients.OnosPort) ([]YangItem, error) {
-	//Create a map of port IDs to port names
-	//e.g. of:00000a0a0a0a0a0a/256 to BBSM000a0001-1
-	portNames := map[string]string{}
-
-	for _, port := range ports {
-		portId := fmt.Sprintf("%s/%s", port.Element, port.Port)
-		name, ok := port.Annotations["portName"]
-		if ok {
-			portNames[portId] = name
-		}
-	}
-
+//translateService returns a slice of yang items that represent a programmed service
+func translateService(tagInfo clients.SadisUniTag, alias ServiceAlias) ([]YangItem, error) {
 	result := []YangItem{}
 
-	for _, subscriber := range subscribers {
-		portName, ok := portNames[subscriber.Location]
-		if !ok {
-			return nil, fmt.Errorf("no-port-name-for-location: %s", subscriber.Location)
-		}
+	portPath := GetServicePortPath(alias.ServiceName, alias.Key.Port)
 
-		serviceName := fmt.Sprintf("%s-%s", portName, subscriber.TagInfo.ServiceName)
-
-		portPath := GetServicePortPath(serviceName, portName)
-
-		if subscriber.TagInfo.ConfiguredMacAddress != "" {
-			result = append(result, YangItem{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:configured-mac-address",
-				Value: subscriber.TagInfo.ConfiguredMacAddress,
-			})
-		}
-
-		result = append(result, []YangItem{
-			{
-				Path:  fmt.Sprintf("%s/port-vlans/port-vlan[name='%s']", portPath, serviceName),
-				Value: "",
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:technology-profile-id",
-				Value: strconv.Itoa(subscriber.TagInfo.TechnologyProfileID),
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:downstream-subscriber-bp-name",
-				Value: subscriber.TagInfo.DownstreamBandwidthProfile,
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:upstream-subscriber-bp-name",
-				Value: subscriber.TagInfo.UpstreamBandwidthProfile,
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:mac-learning-enabled",
-				Value: strconv.FormatBool(subscriber.TagInfo.EnableMacLearning),
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:dhcp-required",
-				Value: strconv.FormatBool(subscriber.TagInfo.IsDhcpRequired),
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:igmp-required",
-				Value: strconv.FormatBool(subscriber.TagInfo.IsIgmpRequired),
-			},
-			{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:pppoe-required",
-				Value: strconv.FormatBool(subscriber.TagInfo.IsPPPoERequired),
-			},
-		}...)
-
-		if subscriber.TagInfo.UpstreamOltBandwidthProfile != "" {
-			result = append(result, YangItem{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:upstream-olt-bp-name",
-				Value: subscriber.TagInfo.UpstreamOltBandwidthProfile,
-			})
-		}
-
-		if subscriber.TagInfo.DownstreamOltBandwidthProfile != "" {
-			result = append(result, YangItem{
-				Path:  portPath + "/bbf-nt-service-profile-voltha:downstream-olt-bp-name",
-				Value: subscriber.TagInfo.UpstreamOltBandwidthProfile,
-			})
-		}
+	if tagInfo.ConfiguredMacAddress != "" {
+		result = append(result, YangItem{
+			Path:  portPath + "/bbf-nt-service-profile-voltha:configured-mac-address",
+			Value: tagInfo.ConfiguredMacAddress,
+		})
 	}
+
+	result = append(result, []YangItem{
+		{
+			Path:  fmt.Sprintf("%s/port-vlans/port-vlan[name='%s']", portPath, alias.VlansName),
+			Value: "",
+		},
+		{
+			Path:  portPath + "/bbf-nt-service-profile-voltha:technology-profile-id",
+			Value: strconv.Itoa(tagInfo.TechnologyProfileID),
+		},
+		{
+			Path:  portPath + "/bbf-nt-service-profile-voltha:mac-learning-enabled",
+			Value: strconv.FormatBool(tagInfo.EnableMacLearning),
+		},
+		{
+			Path:  portPath + "/bbf-nt-service-profile-voltha:dhcp-required",
+			Value: strconv.FormatBool(tagInfo.IsDhcpRequired),
+		},
+		{
+			Path:  portPath + "/bbf-nt-service-profile-voltha:igmp-required",
+			Value: strconv.FormatBool(tagInfo.IsIgmpRequired),
+		},
+		{
+			Path:  portPath + "/bbf-nt-service-profile-voltha:pppoe-required",
+			Value: strconv.FormatBool(tagInfo.IsPPPoERequired),
+		},
+	}...)
+
+	// TODO: The creation of leaves for Bandwidth Profiles has been temporarily
+	// removed to avoid validation issues during reconciliation, until the translation
+	// of Bandwidth Profiles is agreed.
+	// See translateBandwidthProfiles()
 
 	return result, nil
 }
 
-//translateVlans returns a slice of yang items that represent the vlans used by programmed services
-func translateVlans(subscribers []clients.ProgrammedSubscriber, ports []clients.OnosPort) ([]YangItem, error) {
-	//Create a map of port IDs to port names
-	//e.g. of:00000a0a0a0a0a0a/256 to BBSM000a0001-1
-	portNames := map[string]string{}
-
-	for _, port := range ports {
-		portId := fmt.Sprintf("%s/%s", port.Element, port.Port)
-		name, ok := port.Annotations["portName"]
-		if ok {
-			portNames[portId] = name
-		}
-	}
-
+//translateVlans returns a slice of yang items that represent the vlans used by a programmed service
+func translateVlans(tagInfo clients.SadisUniTag, alias ServiceAlias) ([]YangItem, error) {
 	result := []YangItem{}
 
-	for _, subscriber := range subscribers {
-		portName, ok := portNames[subscriber.Location]
-		if !ok {
-			return nil, fmt.Errorf("no-port-name-for-location: %s", subscriber.Location)
-		}
+	vlansPath := GetVlansPath(alias.VlansName)
 
-		serviceName := fmt.Sprintf("%s-%s", portName, subscriber.TagInfo.ServiceName)
+	uniTagMatch := YangVlanIdAny
+	sTag := YangVlanIdAny
+	cTag := YangVlanIdAny
 
-		vlansPath := GetVlansPath(serviceName)
+	if tagInfo.UniTagMatch != VolthaVlanIdAny {
+		uniTagMatch = strconv.Itoa(tagInfo.UniTagMatch)
+	}
+	if tagInfo.PonSTag != VolthaVlanIdAny {
+		sTag = strconv.Itoa(tagInfo.PonSTag)
+	}
+	if tagInfo.PonCTag != VolthaVlanIdAny {
+		cTag = strconv.Itoa(tagInfo.PonCTag)
+	}
 
-		uniTagMatch := YangVlanIdAny
-		sTag := YangVlanIdAny
-		cTag := YangVlanIdAny
-
-		if subscriber.TagInfo.UniTagMatch != VolthaVlanIdAny {
-			uniTagMatch = strconv.Itoa(subscriber.TagInfo.UniTagMatch)
-		}
-		if subscriber.TagInfo.PonSTag != VolthaVlanIdAny {
-			sTag = strconv.Itoa(subscriber.TagInfo.PonSTag)
-		}
-		if subscriber.TagInfo.PonCTag != VolthaVlanIdAny {
-			cTag = strconv.Itoa(subscriber.TagInfo.PonCTag)
-		}
-
-		if subscriber.TagInfo.UniTagMatch > 0 {
-			result = append(result, []YangItem{
-				{
-					Path:  vlansPath + "/match-criteria/outer-tag/vlan-id",
-					Value: uniTagMatch,
-				},
-				{
-					Path:  vlansPath + "/match-criteria/second-tag/vlan-id",
-					Value: "any",
-				},
-			}...)
-		}
-
-		if subscriber.TagInfo.UsPonSTagPriority >= 0 {
-			result = append(result, YangItem{
-				Path:  vlansPath + "/ingress-rewrite/push-outer-tag/pbit",
-				Value: strconv.Itoa(subscriber.TagInfo.UsPonSTagPriority),
-			})
-		}
-		if subscriber.TagInfo.DsPonSTagPriority >= 0 {
-			result = append(result, YangItem{
-				Path:  vlansPath + "/ingress-rewrite/push-outer-tag/bbf-voltha-vlan-translation:dpbit",
-				Value: strconv.Itoa(subscriber.TagInfo.DsPonSTagPriority),
-			})
-		}
-		if subscriber.TagInfo.UsPonCTagPriority >= 0 {
-			result = append(result, YangItem{
-				Path:  vlansPath + "/ingress-rewrite/push-second-tag/pbit",
-				Value: strconv.Itoa(subscriber.TagInfo.UsPonCTagPriority),
-			})
-		}
-		if subscriber.TagInfo.DsPonCTagPriority >= 0 {
-			result = append(result, YangItem{
-				Path:  vlansPath + "/ingress-rewrite/push-second-tag/bbf-voltha-vlan-translation:dpbit",
-				Value: strconv.Itoa(subscriber.TagInfo.DsPonCTagPriority),
-			})
-		}
-
+	if tagInfo.UniTagMatch > 0 {
 		result = append(result, []YangItem{
 			{
-				Path:  vlansPath + "/ingress-rewrite/push-outer-tag/vlan-id",
-				Value: sTag,
+				Path:  vlansPath + "/match-criteria/outer-tag/vlan-id",
+				Value: uniTagMatch,
 			},
 			{
-				Path:  vlansPath + "/ingress-rewrite/push-second-tag/vlan-id",
-				Value: cTag,
+				Path:  vlansPath + "/match-criteria/second-tag/vlan-id",
+				Value: "any",
 			},
 		}...)
 	}
+
+	if tagInfo.UsPonSTagPriority >= 0 {
+		result = append(result, YangItem{
+			Path:  vlansPath + "/ingress-rewrite/push-outer-tag/pbit",
+			Value: strconv.Itoa(tagInfo.UsPonSTagPriority),
+		})
+	}
+	if tagInfo.DsPonSTagPriority >= 0 {
+		result = append(result, YangItem{
+			Path:  vlansPath + "/ingress-rewrite/push-outer-tag/bbf-voltha-vlan-translation:dpbit",
+			Value: strconv.Itoa(tagInfo.DsPonSTagPriority),
+		})
+	}
+	if tagInfo.UsPonCTagPriority >= 0 {
+		result = append(result, YangItem{
+			Path:  vlansPath + "/ingress-rewrite/push-second-tag/pbit",
+			Value: strconv.Itoa(tagInfo.UsPonCTagPriority),
+		})
+	}
+	if tagInfo.DsPonCTagPriority >= 0 {
+		result = append(result, YangItem{
+			Path:  vlansPath + "/ingress-rewrite/push-second-tag/bbf-voltha-vlan-translation:dpbit",
+			Value: strconv.Itoa(tagInfo.DsPonCTagPriority),
+		})
+	}
+
+	result = append(result, []YangItem{
+		{
+			Path:  vlansPath + "/ingress-rewrite/push-outer-tag/vlan-id",
+			Value: sTag,
+		},
+		{
+			Path:  vlansPath + "/ingress-rewrite/push-second-tag/vlan-id",
+			Value: cTag,
+		},
+	}...)
 
 	return result, nil
 }

@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opencord/voltha-lib-go/v7/pkg/db"
 	"github.com/opencord/voltha-lib-go/v7/pkg/log"
 	"github.com/opencord/voltha-lib-go/v7/pkg/probe"
 	"github.com/opencord/voltha-lib-go/v7/pkg/version"
@@ -37,6 +38,8 @@ import (
 const (
 	bbfAdapterService = "bbf-adapter-service"
 	sysrepoService    = "sysrepo"
+
+	kvStoreBbfAdapterSuffix = "/bbf-adapter"
 )
 
 type bbfAdapter struct {
@@ -45,6 +48,7 @@ type bbfAdapter struct {
 	onosClient      *clients.OnosClient
 	sysrepoPlugin   *sysrepo.SysrepoPlugin
 	kafkaConsumer   *clients.KafkaConsumer
+	kvStoreBackend  *db.Backend
 }
 
 func newBbfAdapter(conf *config.BBFAdapterConfig) *bbfAdapter {
@@ -72,8 +76,19 @@ func (a *bbfAdapter) start(ctx context.Context) {
 		probe.UpdateStatusFromContext(ctx, a.conf.OnosRestEndpoint, probe.ServiceStatusRunning)
 	}
 
+	//Connect to the KVStore
+	a.kvStoreBackend = db.NewBackend(ctx, a.conf.KvStoreType, a.conf.KvStoreAddress, a.conf.KvStoreTimeout, a.conf.KvStorePrefix+kvStoreBbfAdapterSuffix)
+	if err != nil {
+		logger.Fatalw(ctx, "failed-to-start-kv-store-client", log.Fields{"err": err})
+	}
+	if a.kvStoreBackend.PerformLivenessCheck(ctx) {
+		probe.UpdateStatusFromContext(ctx, a.conf.KvStoreAddress, probe.ServiceStatusRunning)
+	} else {
+		logger.Fatalw(ctx, "failed-to-connect-to-kv-store-client", log.Fields{"err": err})
+	}
+
 	//Create the global adapter that will be used by callbacks
-	core.AdapterInstance = core.NewVolthaYangAdapter(a.volthaNbiClient, a.onosClient)
+	core.AdapterInstance = core.NewVolthaYangAdapter(a.volthaNbiClient, a.onosClient, a.kvStoreBackend)
 
 	//Load sysrepo plugin
 	a.sysrepoPlugin, err = sysrepo.StartNewPlugin(ctx, a.conf.SchemaMountFilePath)
@@ -214,6 +229,7 @@ func main() {
 		bbfAdapterService,
 		conf.VolthaNbiEndpoint,
 		conf.OnosRestEndpoint,
+		conf.KvStoreAddress,
 		conf.KafkaClusterAddress,
 		sysrepoService,
 	)

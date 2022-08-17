@@ -18,11 +18,11 @@
 
 <vlan-translation-profiles xmlns="urn:bbf:yang:bbf-l2-access-attributes">
     <vlan-translation-profile xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xc:operation="delete">
-        <name>BBSM000a0001-1-hsia</name>
+        <name>hsia-vlans</name>
 	</vlan-translation-profile>
 </vlan-translation-profiles>
 <service-profiles xmlns="urn:bbf:yang:bbf-nt-service-profile">
     <service-profile xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0" xc:operation="delete">
-        <name>BBSM000a0001-1-hsia</name>
+        <name>hsia</name>
     </service-profile>
 </service-profiles>

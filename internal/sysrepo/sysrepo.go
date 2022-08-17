@@ -125,6 +125,13 @@ func StartNewPlugin(ctx context.Context, schemaMountFilePath string) (*SysrepoPl
 	//Bind the callback needed to support schema-mount
 	C.sr_set_ext_data_cb(plugin.connection, C.function(C.mountpoint_ext_data_clb), unsafe.Pointer(plugin.schemaMountData))
 
+	//Reconcile the content of the running datastore with the services in ONOS
+	//i.e. create yang nodes for already provisioned services
+	//so that they can be removed through NETCONF with an edit-config
+	if err := plugin.reconcileServices(ctx); err != nil {
+		return nil, fmt.Errorf("plugin-startup-cannot-reconcile-services: %v", err)
+	}
+
 	//Set callbacks for events
 
 	//Subscribe with a callback to the request of data on a certain path
@@ -302,6 +309,57 @@ func (p *SysrepoPlugin) Stop(ctx context.Context) error {
 	}
 
 	logger.Debug(ctx, "sysrepo-plugin-stopped")
+
+	return nil
+}
+
+//reconcileServices retrieves the currently active services from ONOS
+//and creates YANG nodes in the running datastore to allow their management
+//through NETCONF
+func (p *SysrepoPlugin) reconcileServices(ctx context.Context) error {
+	if core.AdapterInstance == nil {
+		return fmt.Errorf("nil-adapter-instance")
+	}
+
+	//Get and create VLANs first, otherwise validation for services will fail
+	vlansItems, err := core.AdapterInstance.GetVlans(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot-get-programmed-vlans: %v", err)
+	}
+
+	if len(vlansItems) > 0 {
+		vlansTree, err := createYangTree(ctx, p.runningSession, vlansItems)
+		if err != nil {
+			return fmt.Errorf("cannot-create-vlans-tree: %v", err)
+		}
+		defer C.lyd_free_all(vlansTree)
+
+		err = editDatastore(ctx, p.runningSession, vlansTree)
+		if err != nil {
+			return fmt.Errorf("cannot-add-vlans-to-datastore: %v", err)
+		}
+	}
+
+	//Get and create nodes for services
+	servicesItems, err := core.AdapterInstance.GetServices(ctx)
+	if err != nil {
+		return fmt.Errorf("cannot-get-programmed-services: %v", err)
+	}
+
+	if len(servicesItems) > 0 {
+		servicesTree, err := createYangTree(ctx, p.runningSession, servicesItems)
+		if err != nil {
+			return fmt.Errorf("cannot-create-services-tree: %v", err)
+		}
+		defer C.lyd_free_all(servicesTree)
+
+		err = editDatastore(ctx, p.runningSession, servicesTree)
+		if err != nil {
+			return fmt.Errorf("cannot-add-services-to-datastore: %v", err)
+		}
+	}
+
+	logger.Info(ctx, "reconciled-active-services")
 
 	return nil
 }

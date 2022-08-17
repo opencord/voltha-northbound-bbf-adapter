@@ -19,6 +19,7 @@ package config
 import (
 	"context"
 	"flag"
+	"time"
 )
 
 type BBFAdapterConfig struct {
@@ -37,6 +38,10 @@ type BBFAdapterConfig struct {
 	OnosPassword          string
 	SchemaMountFilePath   string
 	KafkaClusterAddress   string
+	KvStoreType           string
+	KvStoreAddress        string
+	KvStoreTimeout        time.Duration
+	KvStorePrefix         string
 }
 
 // LoadConfig loads the BBF adapter configuration through
@@ -59,6 +64,10 @@ func LoadConfig(ctx context.Context) *BBFAdapterConfig {
 	flag.StringVar(&conf.OnosPassword, "onos_pass", conf.OnosPassword, "Password for ONOS REST APIs")
 	flag.StringVar(&conf.SchemaMountFilePath, "schema_mount_path", conf.SchemaMountFilePath, "Path to the XML file that defines schema-mounts for libyang")
 	flag.StringVar(&conf.KafkaClusterAddress, "kafka_cluster_address", conf.KafkaClusterAddress, "Kafka cluster messaging address")
+	flag.StringVar(&conf.KvStoreType, "kv_store_type", conf.KvStoreType, "KV store type (etcd, redis)")
+	flag.StringVar(&conf.KvStoreAddress, "kv_store_address", conf.KvStoreAddress, "KV store address")
+	flag.DurationVar(&conf.KvStoreTimeout, "kv_store_request_timeout", conf.KvStoreTimeout, "The default timeout when making a KV store request")
+	flag.StringVar(&conf.KvStorePrefix, "kv_store_prefix", conf.KvStorePrefix, "Prefix used in KV store paths")
 
 	flag.Parse()
 
@@ -83,5 +92,9 @@ func getDefaultConfig() *BBFAdapterConfig {
 		OnosPassword:          "rocks",
 		SchemaMountFilePath:   "/schema-mount.xml",
 		KafkaClusterAddress:   "127.0.0.1:9092",
+		KvStoreType:           "etcd",
+		KvStoreAddress:        "etcd:2379",
+		KvStoreTimeout:        time.Second * 5,
+		KvStorePrefix:         "service/voltha_voltha",
 	}
 }

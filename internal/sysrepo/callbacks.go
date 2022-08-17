@@ -265,13 +265,18 @@ func edit_service_create(ctx context.Context, editSession *C.sr_session_ctx_t, r
 		cTag = strconv.Itoa(core.VolthaVlanIdAny)
 	}
 
+	alias := core.ServiceAlias{
+		Key: core.ServiceKey{
+			Port: portName,
+			CTag: cTag,
+			STag: sTag,
+			TpId: tpId,
+		},
+		ServiceName: serviceName,
+		VlansName:   vlanName,
+	}
 	logger.Infow(ctx, "new-service-profile-information", log.Fields{
-		"service":  serviceName,
-		"port":     portName,
-		"vlanName": vlanName,
-		"tpId":     tpId,
-		"sTag":     sTag,
-		"cTag":     cTag,
+		"serviceInfo": alias,
 	})
 
 	if core.AdapterInstance == nil {
@@ -285,6 +290,13 @@ func edit_service_create(ctx context.Context, editSession *C.sr_session_ctx_t, r
 			"err":     err,
 		})
 		return C.SR_ERR_OPERATION_FAILED
+	}
+
+	if err := core.AdapterInstance.StoreServiceAlias(ctx, alias); err != nil {
+		//Log the error but don't make the callback fail
+		//The service in ONOS has been provisioned succesfully and the datastore has to stay aligned
+		//A fallback alias will be created if service data is requested later
+		logger.Errorw(ctx, "cannot-store-service-alias-in-kvstore", log.Fields{"err": err, "service": serviceName})
 	}
 
 	logger.Infow(ctx, "service-profile-creation-request-served", log.Fields{
@@ -335,13 +347,18 @@ func edit_service_delete(ctx context.Context, editSession *C.sr_session_ctx_t, r
 		cTag = strconv.Itoa(core.VolthaVlanIdAny)
 	}
 
+	alias := core.ServiceAlias{
+		Key: core.ServiceKey{
+			Port: portName,
+			CTag: cTag,
+			STag: sTag,
+			TpId: tpId,
+		},
+		ServiceName: serviceName,
+		VlansName:   vlanName,
+	}
 	logger.Infow(ctx, "service-profile-deletion-information", log.Fields{
-		"service":  serviceName,
-		"port":     portName,
-		"vlanName": vlanName,
-		"tpId":     tpId,
-		"sTag":     sTag,
-		"cTag":     cTag,
+		"serviceInfo": alias,
 	})
 
 	if err := core.AdapterInstance.RemoveService(portName, sTag, cTag, tpId); err != nil {
@@ -350,6 +367,13 @@ func edit_service_delete(ctx context.Context, editSession *C.sr_session_ctx_t, r
 			"err":     err,
 		})
 		return C.SR_ERR_OPERATION_FAILED
+	}
+
+	if err := core.AdapterInstance.DeleteServiceAlias(ctx, alias.Key); err != nil {
+		//Log the error but don't make the callback fail
+		//The service in ONOS has been removed succesfully and the datastore has to stay aligned
+		//The only side effect is a dangling alias left in the KV store
+		logger.Errorw(ctx, "cannot-delete-service-alias-from-kvstore", log.Fields{"err": err, "service": serviceName})
 	}
 
 	logger.Infow(ctx, "service-profile-removal-request-served", log.Fields{
